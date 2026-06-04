@@ -1,0 +1,9 @@
+node_modules/
+.env
+solsniper.db
+solsniper.db-shm
+solsniper.db-wal
+server.log
+.DS_Store
+build/
+dist/
