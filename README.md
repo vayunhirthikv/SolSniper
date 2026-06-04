@@ -6,7 +6,7 @@ SolSniper is a premium, real-time paper-trading dashboard designed to simulate a
 
 ---
 
-## ⚡ Tech Stack
+##  Tech Stack
 
 - **Frontend**: React (Vite) + Vanilla CSS (Aesthetic Flat Dark UI) + Recharts + Socket.io Client
 - **Backend**: Node.js + Express + Socket.io Server
@@ -16,14 +16,14 @@ SolSniper is a premium, real-time paper-trading dashboard designed to simulate a
 
 ---
 
-## 🛠 Core Features
+##  Core Features
 
-### 📡 1. Live Token Feed & Scanning
+###  1. Live Token Feed & Scanning
 - **Continuous Discovery**: Polls DexScreener's new pairs API constantly (high concurrency support up to 10 parallel scans).
 - **In-Memory Cache**: Deduplicates seen addresses in memory and database lists to prevent reprocessing.
 - **Pause/Resume**: Users can instantly pause the scanner from the Dashboard to analyze current trades.
 
-### 🛡 2. Multi-Stage Hard Filters (8 Checks)
+###  2. Multi-Stage Hard Filters (8 Checks)
 Every token must pass all 8 configurable filters or it is rejected:
 1. **Mint Authority**: Must be renounced (verified via RugCheck API).
 2. **Freeze Authority**: Must be disabled (verified via RugCheck API).
@@ -34,7 +34,7 @@ Every token must pass all 8 configurable filters or it is rejected:
 7. **Transaction Count**: Configurable minimum 24h transactions (Default: $\geq$ 20).
 8. **Top Holder Concentration**: Configurable maximum top 10 holders percentage (Default: $\leq$ 60% of supply via Solscan API).
 
-### 📊 3. Soft Scoring System (0-10)
+###  3. Soft Scoring System (0-10)
 Tokens that pass hard filters are scored based on positive indicators:
 - **LP Locked** (+1 point)
 - **Whale Safe** (+1 point if top holder has <45%)
@@ -44,12 +44,12 @@ Tokens that pass hard filters are scored based on positive indicators:
 - **Social Presence**: Has Twitter or Telegram (+1 point); Has Twitter AND Telegram AND Website (+2 points)
 - **Pump.fun Graduation** (+2 points if pair graduated from Pump.fun bonding curve to Raydium)
 
-### 📈 4. Dynamic Position Sizing
+###  4. Dynamic Position Sizing
 - **Tier-Based Sizing**: Automates entry size based on the Soft Score using 4 fully customizable tiers (e.g., Tier 1 for Score $\geq$ 4 = $0.75; Tier 4 for Score $\geq$ 7 = $2.50).
 - **Social Bonus**: Adds a configurable bonus (Default: +$0.50) to position sizing if the token has both active Twitter/Telegram socials AND graduated from pump.fun.
 - **Risk Halt**: Integrates a **Daily Loss Limit** that pauses virtual purchases if accumulated daily losses cross the threshold (Default: $40).
 
-### 🚪 5. Smart Exit Ladder & Exit Rules
+###  5. Smart Exit Ladder & Exit Rules
 - **Take Profit**: Configurable hard Take Profit % that closes the entire trade instantly.
 - **Stop Loss**: Configurable hard Stop Loss % (Default: close position if price drops $\geq$ 65% from entry).
 - **Time Exit**: Auto-close position after a set amount of hours if current profit is < 20% (Default: 3 hours).
@@ -60,20 +60,20 @@ Tokens that pass hard filters are scored based on positive indicators:
   - **Level 3**: +1000% PnL $\rightarrow$ Sell 20% of original size.
   - **Level 4**: +3000% PnL $\rightarrow$ Sell 50% of remaining size.
 
-### 📱 6. Telegram Notifications
+###  6. Telegram Notifications
 - **Live Alerts**: Connect a Telegram bot via `@BotFather` to receive instant messages to your phone or desktop.
 - **Trade Opened**: Pings you with Token Name, Address, Score, Entry Price, and Position Size.
 - **Trade Closed**: Pings you with the Token Name, Exit Reason, Total PnL (USD & %), and Hold Time.
 - **Test Connection**: Built-in UI button to send a test ping to ensure your Chat ID is correct.
 
-### ⚙️ 7. Full Settings Control
+###  7. Full Settings Control
 - **Real-Time Editor**: Adjust all thresholds, sizing, and exit rules instantly.
 - **Restore Defaults**: Easily revert the entire strategy back to the factory defaults.
 - **Purge Simulation**: Clear all trades, price histories, daily snapshots, scanned tokens, and filter cache, resetting the application to a blank state.
 
 ---
 
-## 🚀 Quick Start (Windows Setup)
+##  Quick Start (Windows Setup)
 
 ### 1. Prerequisites
 Ensure you have [Node.js (18 or higher)](https://nodejs.org/) installed.
@@ -101,7 +101,7 @@ This script will open two terminal windows:
 
 ---
 
-## 🎨 UI Design Architecture
+##  UI Design Architecture
 
 The client incorporates a premium, high-contrast flat-dark dashboard style:
 - **Color Palette**: Dark theme (`#080810`), border trims (`#1a1a2e`), profit green (`#00ff88`), and loss red (`#ff4444`).
@@ -112,7 +112,7 @@ The client incorporates a premium, high-contrast flat-dark dashboard style:
 
 ---
 
-## 📁 Directory Structure
+##  Directory Structure
 
 ```text
 SolSniper/
@@ -140,7 +140,7 @@ SolSniper/
 
 ---
 
-## 📡 Live WebSocket API
+##  Live WebSocket API
 
 Clients receive live broadcasts for UI synchronizations:
 
@@ -156,5 +156,5 @@ Clients receive live broadcasts for UI synchronizations:
 
 ---
 
-## 📜 License
+##  License
 MIT. Built for strategy evaluation, research, and paper-trading simulation purposes.
