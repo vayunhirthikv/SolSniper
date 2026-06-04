@@ -1,6 +1,6 @@
 # SolSniper — Solana Memecoin Sniper Simulator
 
-> **⚠ SIMULATION ONLY** — No real wallets, no real execution, no real SOL involved. All trades are virtual paper-trades. This project runs entirely locally for strategy verification and educational simulation.
+> ** SIMULATION ONLY** — No real wallets, no real execution, no real SOL involved. All trades are virtual paper-trades. This project runs entirely locally for strategy verification and educational simulation.
 
 SolSniper is a premium, real-time paper-trading dashboard designed to simulate and analyze a high-frequency Solana memecoin sniper strategy. The backend polls DexScreener, runs a multi-stage security filter + scoring engine, executes virtual buys, tracks price updates in real time, and manages profit-taking/emergency exits dynamically.
 
