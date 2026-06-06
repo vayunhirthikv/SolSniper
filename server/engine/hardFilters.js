@@ -214,6 +214,19 @@ async function runHardFilters(pair, settings, cachedSecurity = null) {
     return { passed: false, reason: 'whale_concentration', details: results, tokenData };
   }
 
+  // Check 9: Valid Price
+  const priceUsd = parseFloat(pair.priceUsd || '0');
+  results.push({
+    filter_name: 'valid_price',
+    passed: priceUsd > 0,
+    raw_value: priceUsd > 0 ? `$${priceUsd.toFixed(6)}` : '$0',
+    threshold: '> $0',
+  });
+
+  if (priceUsd <= 0) {
+    return { passed: false, reason: 'no_price', details: results, tokenData };
+  }
+
   return { passed: true, reason: null, details: results, tokenData };
 }
 
