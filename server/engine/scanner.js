@@ -343,12 +343,13 @@ async function recheckPendingTokens() {
           pairCreatedAt: new Date(token.detected_at).getTime(),
         }).catch(err => logger.error('processToken error in recheck', { address, error: err.message }));
       } else {
-        // If pair still not found, update the age in database anyway
-        const baseTokenData = {
-          ...token,
-          pair_age_minutes: ageMinutes,
-        };
-        await tokenDb.upsertToken(baseTokenData);
+        // Fallback: pass a stub pair to trigger processToken's Birdeye fallback
+        await processToken({
+          address: token.address,
+          name: token.name,
+          symbol: token.symbol,
+          pairCreatedAt: new Date(token.detected_at).getTime(),
+        }).catch(err => logger.error('processToken error in recheck (Birdeye fallback)', { address, error: err.message }));
       }
     });
 
