@@ -15,7 +15,7 @@ let scannerPaused = false;
 
 // ── Concurrency pool ──────────────────────────────────────────────────────────
 // Process up to CONCURRENCY tokens in parallel without hammering APIs.
-const CONCURRENCY = 10;
+const CONCURRENCY = 2;
 
 async function runPool(items, fn) {
   const queue = [...items];
@@ -102,6 +102,9 @@ async function scanCycle() {
 async function processToken(pair) {
   const address = pair.address;
   logger.debug('Processing token', { address, name: pair.name });
+  
+  // Rate limit protection
+  await new Promise(r => setTimeout(r, 500));
 
   // Check if we need to fetch the real market details from DexScreener
   let realPair = pair;

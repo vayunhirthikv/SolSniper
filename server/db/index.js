@@ -3,7 +3,9 @@ const logger = require('../utils/logger');
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL?.includes('supabase') ? { rejectUnauthorized: false } : false
+  ssl: process.env.DATABASE_URL?.includes('supabase') ? { rejectUnauthorized: false } : false,
+  max: 5, // Prevent exceeding Supabase 15 connection limit
+  connectionTimeoutMillis: 10000
 });
 
 pool.on('error', (err) => {
