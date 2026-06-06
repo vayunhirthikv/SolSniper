@@ -1,4 +1,5 @@
 const dexscreener = require('../api/dexscreener');
+const birdeye = require('../api/birdeye');
 const hardFilters = require('./hardFilters');
 const softScore = require('./softScore');
 const tradeManager = require('./tradeManager');
@@ -52,9 +53,18 @@ async function scanCycle() {
   isScanning = true;
 
   try {
-    logger.debug('Scanner: polling DexScreener...');
+    logger.debug('Scanner: polling DexScreener and Birdeye...');
     const pairs = await dexscreener.pollNewPairs();
-    logger.debug(`Scanner: got ${pairs.length} pairs`);
+    const birdeyePairs = await birdeye.getNewListings();
+    
+    // Merge pairs, prioritizing Birdeye for net-new
+    for (const bp of birdeyePairs) {
+      if (!pairs.find(p => p.address === bp.address)) {
+        pairs.push(bp);
+      }
+    }
+    
+    logger.debug(`Scanner: got ${pairs.length} pairs combined`);
 
     // Filter out already-seen tokens immediately
     const newPairs = pairs.filter(p => p.address && !seenAddresses.has(p.address));
@@ -103,11 +113,20 @@ async function processToken(pair) {
         ...fetched,
         name: pair.name !== 'Unknown' ? pair.name : fetched.name,
         symbol: pair.symbol !== '???' ? pair.symbol : fetched.symbol,
-        info: {
-          ...pair.info,
-          ...fetched.info,
-        }
+        info: { ...pair.info, ...fetched.info }
       };
+    } else {
+      // Fallback to Birdeye for volume/liquidity if DexScreener blocks us
+      const overview = await birdeye.getTokenOverview(address);
+      if (overview) {
+        realPair = {
+          ...pair,
+          liquidity: { usd: overview.liquidity || pair.liquidity.usd || 0 },
+          volume: { h24: overview.v24hUSD || 0, h1: overview.v1hUSD || 0, m5: overview.v5mUSD || 0 },
+          txns: { h24: { buys: overview.trade24h || 0, sells: 0 } },
+          priceUsd: String(overview.price || 0)
+        };
+      }
     }
   }
 

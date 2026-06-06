@@ -55,6 +55,35 @@ async function checkVolumeAcceleration(address) {
   } catch {
     return false;
   }
+async function getNewListings() {
+  try {
+    const response = await axios.get(`${BASE_URL}/defi/v2/tokens/new_listing?limit=20`, {
+      headers: {
+        'X-API-KEY': process.env.BIRDEYE_API_KEY || '',
+        'Accept': 'application/json',
+        'x-chain': 'solana',
+      },
+      timeout: 10000,
+    });
+    const items = response.data?.data?.items || [];
+    return items.map(item => ({
+      address: item.address,
+      name: item.name || 'Unknown',
+      symbol: item.symbol || '???',
+      pairAddress: item.address, // Approximation
+      liquidity: { usd: item.liquidity || 0 },
+      volume: { h24: 0, h1: 0, m5: 0 },
+      txns: { h24: { buys: 0, sells: 0 } },
+      pairCreatedAt: new Date(item.liquidityAddedAt + 'Z').getTime() || Date.now(),
+      priceUsd: '0',
+      info: {},
+      dexId: item.source || 'unknown',
+      baseToken: { address: item.address, name: item.name, symbol: item.symbol }
+    }));
+  } catch (err) {
+    logger.warn('Birdeye getNewListings failed', { error: err.message });
+    return [];
+  }
 }
 
-module.exports = { getTokenTradeData, getTokenOverview, getUniqueWallets, checkVolumeAcceleration };
+module.exports = { getTokenTradeData, getTokenOverview, getUniqueWallets, checkVolumeAcceleration, getNewListings };
