@@ -7,12 +7,12 @@ const tokens = require('../db/tokens');
 // GET /api/analytics/overview
 router.get('/overview', async (req, res) => {
   try {
-    const [overview, todayScanned, todayPassed] = await Promise.all([
+    const [overview, todayScanned, todayPassed, todayLosses] = await Promise.all([
       analytics.getOverview(),
       tokens.countTokensScannedToday(),
       tokens.countTokensPassedToday(),
+      trades.getTodayLosses()
     ]);
-    const todayLosses = trades.getTodayLosses();
     res.json({
       ...overview,
       tokens_scanned_today: todayScanned,
@@ -115,7 +115,7 @@ router.get('/daily-snapshots', async (req, res) => {
       avg_hold_time_seconds: liveStats.avg_hold_time_seconds
     };
 
-    if (data.length > 0 && data[0].snapshot_date === today) {
+    if (data.length > 0 && data[0].snapshot_date && data[0].snapshot_date.toISOString().split('T')[0] === today) {
       data[0] = { ...data[0], ...liveSnapshot };
     } else {
       data.unshift(liveSnapshot);

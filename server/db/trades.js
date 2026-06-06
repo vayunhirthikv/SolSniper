@@ -1,10 +1,8 @@
-const { getDb } = require('./index');
-const crypto = require('crypto');
-
-function genId() { return crypto.randomUUID(); }
+const { query } = require('./index');
 
 function parseLadder(val) {
   if (!val) return { '200pct': false, '500pct': false, '1000pct': false, '3000pct': false };
+  if (typeof val === 'object') return val;
   try { return JSON.parse(val); } catch { return { '200pct': false, '500pct': false, '1000pct': false, '3000pct': false }; }
 }
 
@@ -18,92 +16,95 @@ function parseTrade(t) {
   };
 }
 
-function createTrade(data) {
-  const db = getDb();
-  const id = genId();
-  db.prepare(`
+async function createTrade(data) {
+  const result = await query(`
     INSERT INTO trades (
-      id, token_id, token_address, token_name, entry_time, entry_price,
+      token_id, token_address, token_name, entry_price,
       position_size_usd, soft_score_at_entry, current_price, exit_ladder_progress,
       realized_pnl_usd, remaining_position_pct, entry_liquidity_usd, status
-    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-  `).run(
-    id,
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+    RETURNING *
+  `, [
     data.token_id,
     data.token_address,
     data.token_name,
-    new Date().toISOString(),
     data.entry_price,
     data.position_size_usd,
     data.soft_score_at_entry,
     data.current_price || data.entry_price,
-    JSON.stringify(data.exit_ladder_progress || { '200pct': false, '500pct': false, '1000pct': false, '3000pct': false }),
+    data.exit_ladder_progress || { '200pct': false, '500pct': false, '1000pct': false, '3000pct': false },
     data.realized_pnl_usd || 0,
     data.remaining_position_pct || 100,
     data.entry_liquidity_usd || 0,
     'open'
-  );
-  return parseTrade(db.prepare('SELECT * FROM trades WHERE id = ?').get(id));
+  ]);
+  return parseTrade(result.rows[0]);
 }
 
-function updateTrade(id, updates) {
-  const db = getDb();
+async function updateTrade(id, updates) {
   const fields = [];
   const vals = [];
+  let paramIdx = 1;
   for (const [k, v] of Object.entries(updates)) {
-    fields.push(`${k} = ?`);
-    vals.push(typeof v === 'object' ? JSON.stringify(v) : v);
+    fields.push(`${k} = $${paramIdx++}`);
+    vals.push(v);
   }
   vals.push(id);
-  db.prepare(`UPDATE trades SET ${fields.join(', ')} WHERE id = ?`).run(...vals);
-  return parseTrade(db.prepare('SELECT * FROM trades WHERE id = ?').get(id));
+  const result = await query(`UPDATE trades SET ${fields.join(', ')} WHERE id = $${paramIdx} RETURNING *`, vals);
+  return parseTrade(result.rows[0]);
 }
 
-function closeTrade(id, { exit_price, exit_reason, pnl_usd, pnl_pct, hold_time_seconds, high_pnl_pct, low_pnl_pct }) {
-  const db = getDb();
-  db.prepare(`UPDATE trades SET status='closed', exit_price=?, exit_time=datetime('now'), exit_reason=?, pnl_usd=?, pnl_pct=?, hold_time_seconds=?, high_pnl_pct=?, low_pnl_pct=? WHERE id=?`)
-    .run(exit_price, exit_reason, pnl_usd, pnl_pct, hold_time_seconds, high_pnl_pct ?? null, low_pnl_pct ?? null, id);
-  return parseTrade(db.prepare('SELECT * FROM trades WHERE id = ?').get(id));
+async function closeTrade(id, { exit_price, exit_reason, pnl_usd, pnl_pct, hold_time_seconds, high_pnl_pct, low_pnl_pct }) {
+  const result = await query(`UPDATE trades SET status='closed', exit_price=$1, exit_time=NOW(), exit_reason=$2, pnl_usd=$3, pnl_pct=$4, hold_time_seconds=$5, high_pnl_pct=$6, low_pnl_pct=$7 WHERE id=$8 RETURNING *`,
+    [exit_price, exit_reason, pnl_usd, pnl_pct, hold_time_seconds, high_pnl_pct ?? null, low_pnl_pct ?? null, id]
+  );
+  return parseTrade(result.rows[0]);
 }
 
-function getOpenTrades() {
-  return getDb().prepare(`SELECT * FROM trades WHERE status='open' ORDER BY entry_time ASC`).all().map(parseTrade);
+async function getOpenTrades() {
+  const result = await query(`SELECT * FROM trades WHERE status='open' ORDER BY entry_time ASC`);
+  return result.rows.map(parseTrade);
 }
 
-function getTrade(id) {
-  return parseTrade(getDb().prepare('SELECT * FROM trades WHERE id = ?').get(id));
+async function getTrade(id) {
+  const result = await query('SELECT * FROM trades WHERE id = $1', [id]);
+  return parseTrade(result.rows[0]);
 }
 
-function getTrades({ page = 1, limit = 50, status, score_min, score_max, exit_reason, date_from, date_to } = {}) {
-  const db = getDb();
+async function getTrades({ page = 1, limit = 50, status, score_min, score_max, exit_reason, date_from, date_to } = {}) {
   const conditions = [];
   const params = [];
 
-  if (status) { conditions.push('status = ?'); params.push(status); }
-  if (score_min) { conditions.push('soft_score_at_entry >= ?'); params.push(parseInt(score_min)); }
-  if (score_max) { conditions.push('soft_score_at_entry <= ?'); params.push(parseInt(score_max)); }
-  if (exit_reason) { conditions.push('exit_reason = ?'); params.push(exit_reason); }
-  if (date_from) { conditions.push('entry_time >= ?'); params.push(date_from); }
-  if (date_to) { conditions.push('entry_time <= ?'); params.push(date_to); }
+  if (status) { params.push(status); conditions.push(`status = $${params.length}`); }
+  if (score_min) { params.push(parseInt(score_min)); conditions.push(`soft_score_at_entry >= $${params.length}`); }
+  if (score_max) { params.push(parseInt(score_max)); conditions.push(`soft_score_at_entry <= $${params.length}`); }
+  if (exit_reason) { params.push(exit_reason); conditions.push(`exit_reason = $${params.length}`); }
+  if (date_from) { params.push(date_from); conditions.push(`entry_time >= $${params.length}`); }
+  if (date_to) { params.push(date_to); conditions.push(`entry_time <= $${params.length}`); }
 
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
   const offset = (parseInt(page) - 1) * parseInt(limit);
 
-  const trades = db.prepare(`SELECT * FROM trades ${where} ORDER BY entry_time DESC LIMIT ? OFFSET ?`)
-    .all(...params, parseInt(limit), offset).map(parseTrade);
-  const total = db.prepare(`SELECT COUNT(*) as c FROM trades ${where}`).get(...params)?.c || 0;
+  params.push(parseInt(limit));
+  const limitIdx = params.length;
+  params.push(offset);
+  const offsetIdx = params.length;
 
-  return { trades, total };
+  const result = await query(`SELECT * FROM trades ${where} ORDER BY entry_time DESC LIMIT $${limitIdx} OFFSET $${offsetIdx}`, params);
+  
+  const countParams = params.slice(0, params.length - 2);
+  const countResult = await query(`SELECT COUNT(*) as c FROM trades ${where}`, countParams);
+
+  return { trades: result.rows.map(parseTrade), total: parseInt(countResult.rows[0]?.c || 0) };
 }
 
-function getTodayLosses() {
-  const row = getDb().prepare(`SELECT COALESCE(SUM(ABS(pnl_usd)), 0) as total FROM trades WHERE status='closed' AND date(entry_time)=date('now') AND pnl_usd < 0`).get();
-  return parseFloat(row?.total || 0);
+async function getTodayLosses() {
+  const result = await query(`SELECT COALESCE(SUM(ABS(pnl_usd)), 0) as total FROM trades WHERE status='closed' AND DATE(entry_time)=CURRENT_DATE AND pnl_usd < 0`);
+  return parseFloat(result.rows[0]?.total || 0);
 }
 
-function getTradeStats() {
-  const db = getDb();
-  const r = db.prepare(`
+async function getTradeStats() {
+  const result = await query(`
     SELECT
       COUNT(*) as total_trades,
       SUM(CASE WHEN status='open' THEN 1 ELSE 0 END) as open_trades,
@@ -116,48 +117,49 @@ function getTradeStats() {
       MIN(pnl_pct) as worst_trade_pnl_pct,
       COALESCE(AVG(hold_time_seconds), 0) as avg_hold_time_seconds
     FROM trades
-  `).get();
-  return r;
+  `);
+  return result.rows[0];
 }
 
-function getPriceHistory(tokenAddress, limit = 200) {
-  return getDb().prepare(`SELECT * FROM price_history WHERE token_address = ? ORDER BY recorded_at ASC LIMIT ?`).all(tokenAddress, limit);
+async function getPriceHistory(tokenAddress, limit = 200) {
+  const result = await query(`SELECT * FROM price_history WHERE token_address = $1 ORDER BY recorded_at ASC LIMIT $2`, [tokenAddress, limit]);
+  return result.rows;
 }
 
-function insertPriceHistory(data) {
-  getDb().prepare(`INSERT INTO price_history (id, token_address, price, liquidity_usd, volume_usd) VALUES (?,?,?,?,?)`)
-    .run(genId(), data.token_address, data.price, data.liquidity_usd, data.volume_usd);
+async function insertPriceHistory(data) {
+  await query(`INSERT INTO price_history (token_address, price, liquidity_usd, volume_usd) VALUES ($1,$2,$3,$4)`,
+    [data.token_address, data.price, data.liquidity_usd, data.volume_usd]);
 }
 
-function getDailySnapshots(days = 30) {
-  return getDb().prepare(`SELECT * FROM analytics_snapshots ORDER BY snapshot_date DESC LIMIT ?`).all(days);
+async function getDailySnapshots(days = 30) {
+  const result = await query(`SELECT * FROM analytics_snapshots ORDER BY snapshot_date DESC LIMIT $1`, [days]);
+  return result.rows;
 }
 
-function upsertDailySnapshot(data) {
-  getDb().prepare(`
-    INSERT INTO analytics_snapshots (id, snapshot_date, total_trades, winning_trades, losing_trades, total_pnl_usd, best_trade_pnl_pct, worst_trade_pnl_pct, avg_hold_time_seconds, tokens_scanned, tokens_passed_hard, tokens_entered)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+async function upsertDailySnapshot(data) {
+  await query(`
+    INSERT INTO analytics_snapshots (snapshot_date, total_trades, winning_trades, losing_trades, total_pnl_usd, best_trade_pnl_pct, worst_trade_pnl_pct, avg_hold_time_seconds, tokens_scanned, tokens_passed_hard, tokens_entered)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
     ON CONFLICT(snapshot_date) DO UPDATE SET
       total_trades=excluded.total_trades, winning_trades=excluded.winning_trades,
       losing_trades=excluded.losing_trades, total_pnl_usd=excluded.total_pnl_usd,
       best_trade_pnl_pct=excluded.best_trade_pnl_pct, worst_trade_pnl_pct=excluded.worst_trade_pnl_pct,
       avg_hold_time_seconds=excluded.avg_hold_time_seconds, tokens_scanned=excluded.tokens_scanned,
       tokens_passed_hard=excluded.tokens_passed_hard, tokens_entered=excluded.tokens_entered
-  `).run(genId(), data.snapshot_date, data.total_trades, data.winning_trades, data.losing_trades, data.total_pnl_usd, data.best_trade_pnl_pct, data.worst_trade_pnl_pct, data.avg_hold_time_seconds, data.tokens_scanned, data.tokens_passed_hard, data.tokens_entered);
+  `, [data.snapshot_date, data.total_trades, data.winning_trades, data.losing_trades, data.total_pnl_usd, data.best_trade_pnl_pct, data.worst_trade_pnl_pct, data.avg_hold_time_seconds, data.tokens_scanned, data.tokens_passed_hard, data.tokens_entered]);
 }
 
-function clearAllTrades() {
-  const db = getDb();
-  db.prepare('DELETE FROM trades').run();
-  db.prepare('DELETE FROM price_history').run();
-  db.prepare('DELETE FROM analytics_snapshots').run();
-  db.prepare('DELETE FROM tokens').run();
-  db.prepare('DELETE FROM filter_results').run();
+async function clearAllTrades() {
+  await query('DELETE FROM trades');
+  await query('DELETE FROM price_history');
+  await query('DELETE FROM analytics_snapshots');
+  await query('DELETE FROM tokens');
+  await query('DELETE FROM filter_results');
 }
 
-function hasTradeForToken(tokenAddress) {
-  const t = getDb().prepare('SELECT id FROM trades WHERE token_address = ?').get(tokenAddress);
-  return !!t;
+async function hasTradeForToken(tokenAddress) {
+  const result = await query('SELECT id FROM trades WHERE token_address = $1', [tokenAddress]);
+  return result.rows.length > 0;
 }
 
 module.exports = {

@@ -112,18 +112,14 @@ async function processToken(pair) {
   }
 
   // Check database for existing token
-  const existingToken = tokenDb.getTokenByAddress(address);
+  const existingToken = await tokenDb.getTokenByAddress(address);
   let cachedSecurity = null;
 
   if (existingToken) {
     const tradesDb = require('../db/trades');
     
-    // If it already passed hard filters AND was bought, skip it.
-    // If it wasn't bought, we let it process again to re-evaluate its soft score.
-    if (existingToken.hard_filter_passed && tradesDb.hasTradeForToken(address)) {
-      seenAddresses.add(address);
-      return;
-    }
+    // We no longer skip tokens if they are bought. We let them process again
+    // to re-evaluate their soft score, but we will skip buying them later.
 
     const permanentReasons = ['mint_not_renounced', 'freeze_authority_enabled', 'honeypot', 'high_sell_tax', 'too_old'];
     if (permanentReasons.includes(existingToken.hard_filter_reject_reason)) {
@@ -200,9 +196,6 @@ async function processToken(pair) {
     return;
   }
 
-  // If it passed hard filters, add to seenAddresses so we don't evaluate/buy it again
-  seenAddresses.add(address);
-
   // Run soft scoring
   let scoreResult;
   try {
@@ -241,75 +234,86 @@ async function processToken(pair) {
     return;
   }
 
-  // Execute virtual buy
-  const trade = await tradeManager.executeBuy(
-    savedToken,
-    realPair,
-    scoreResult.score,
-    scoreResult.breakdown,
-    currentSettings
-  );
+  // Execute virtual buy if not already bought
+  const tradesDb = require('../db/trades');
+  if (!tradesDb.hasTradeForToken(address)) {
+    const trade = await tradeManager.executeBuy(
+      savedToken,
+      realPair,
+      scoreResult.score,
+      scoreResult.breakdown,
+      currentSettings
+    );
 
-  if (trade) {
-    logger.info('Trade opened', {
-      token: realPair.name,
-      score: scoreResult.score,
-      position: trade.position_size_usd,
-    });
+    if (trade) {
+      logger.info('Trade opened', {
+        token: realPair.name,
+        score: scoreResult.score,
+        position: trade.position_size_usd,
+      });
+    }
+  } else {
+    logger.debug('Token already bought, skipped executeBuy', { address });
   }
 }
 
 async function recheckPendingTokens() {
   try {
     const maxAge = parseFloat(currentSettings.max_pair_age_minutes || 20);
-    const pendingTokens = tokenDb.getTransientlyRejectedTokens(maxAge);
+    const pendingTokens = await tokenDb.getTransientlyRejectedTokens(maxAge);
 
     if (pendingTokens.length === 0) return;
 
-    logger.debug(`Scanner: rechecking ${pendingTokens.length} pending token(s) in parallel`);
+    logger.debug(`Scanner: rechecking ${pendingTokens.length} pending token(s)`);
 
-    await runPool(pendingTokens, async (token) => {
-      const address = token.address;
+    const toAgeOut = [];
+    const toRecheck = [];
+
+    for (const token of pendingTokens) {
       const ageMinutes = (Date.now() - new Date(token.detected_at).getTime()) / 60000;
-
-      // If it exceeded max age, mark as too_old (permanent reject)
       if (ageMinutes > maxAge) {
-        const baseTokenData = {
-          address: token.address,
-          name: token.name,
-          symbol: token.symbol,
-          detected_at: token.detected_at,
-          pair_age_minutes: ageMinutes,
-          liquidity_usd: token.liquidity_usd,
-          volume_usd: token.volume_usd,
-          txn_count: token.txn_count,
-          unique_wallets: token.unique_wallets,
-          top_holder_pct: token.top_holder_pct,
-          mint_renounced: token.mint_renounced,
-          freeze_disabled: token.freeze_disabled,
-          honeypot_safe: token.honeypot_safe,
-          lp_locked: token.lp_locked,
-          pumpfun_graduated: token.pumpfun_graduated,
-          social_twitter: token.social_twitter,
-          social_telegram: token.social_telegram,
-          social_website: token.social_website,
-          hard_filter_passed: 0,
-          hard_filter_reject_reason: 'too_old',
-        };
-        await tokenDb.upsertToken(baseTokenData);
-        seenAddresses.add(address);
-        emit('token_rejected', {
-          address,
-          name: token.name,
-          reason: 'too_old',
-          timestamp: new Date().toISOString(),
-        });
-        logger.debug('Token aged out', { address });
-        return;
+        toAgeOut.push({ token, ageMinutes });
+      } else {
+        toRecheck.push({ token, ageMinutes });
       }
+    }
 
-      // Query DexScreener for the latest real-time stats
-      const pair = await dexscreener.getPairByAddress(address);
+    // Age out tokens
+    for (const { token, ageMinutes } of toAgeOut) {
+      const address = token.address;
+      const baseTokenData = {
+        ...token,
+        pair_age_minutes: ageMinutes,
+        hard_filter_passed: 0,
+        hard_filter_reject_reason: 'too_old',
+      };
+      await tokenDb.upsertToken(baseTokenData);
+      seenAddresses.add(address);
+      emit('token_rejected', {
+        address,
+        name: token.name,
+        reason: 'too_old',
+        timestamp: new Date().toISOString(),
+      });
+      logger.debug('Token aged out', { address });
+    }
+
+    if (toRecheck.length === 0) return;
+
+    // Batch fetch from DexScreener
+    const addresses = toRecheck.map(t => t.token.address);
+    const pairs = await dexscreener.getPairsByAddresses(addresses);
+    
+    // Create a map for fast lookup
+    const pairMap = {};
+    for (const p of pairs) {
+      if (p) pairMap[p.address] = p;
+    }
+
+    await runPool(toRecheck, async ({ token, ageMinutes }) => {
+      const address = token.address;
+      const pair = pairMap[address];
+      
       if (pair) {
         await processToken({
           ...pair,
@@ -318,30 +322,13 @@ async function recheckPendingTokens() {
       } else {
         // If pair still not found, update the age in database anyway
         const baseTokenData = {
-          address: token.address,
-          name: token.name,
-          symbol: token.symbol,
-          detected_at: token.detected_at,
+          ...token,
           pair_age_minutes: ageMinutes,
-          liquidity_usd: token.liquidity_usd,
-          volume_usd: token.volume_usd,
-          txn_count: token.txn_count,
-          unique_wallets: token.unique_wallets,
-          top_holder_pct: token.top_holder_pct,
-          mint_renounced: token.mint_renounced,
-          freeze_disabled: token.freeze_disabled,
-          honeypot_safe: token.honeypot_safe,
-          lp_locked: token.lp_locked,
-          pumpfun_graduated: token.pumpfun_graduated,
-          social_twitter: token.social_twitter,
-          social_telegram: token.social_telegram,
-          social_website: token.social_website,
-          hard_filter_passed: token.hard_filter_passed,
-          hard_filter_reject_reason: token.hard_filter_reject_reason,
         };
         await tokenDb.upsertToken(baseTokenData);
       }
     });
+
   } catch (err) {
     logger.error('Error in recheckPendingTokens', { error: err.message });
   }

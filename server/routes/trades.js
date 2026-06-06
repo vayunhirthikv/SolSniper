@@ -49,7 +49,7 @@ router.get('/:id', async (req, res) => {
 router.post('/reset', async (req, res) => {
   try {
     const scanner = require('../engine/scanner');
-    db.clearAllTrades();
+    await db.clearAllTrades();
     scanner.clearSeenAddresses();
     res.json({ success: true, message: 'All trades and scanned tokens cleared successfully' });
   } catch (err) {

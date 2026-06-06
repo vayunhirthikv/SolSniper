@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useData } from '../context/DataContext';
+import { useSocket } from '../hooks/useSocket';
 import { formatUSD, truncateAddress, parseDate } from '../utils/formatters';
 import { ScoreBadge } from '../components/shared/Badge';
 import { CopyButton } from '../components/shared/Tooltip';
@@ -41,8 +42,8 @@ function FilterIconRow({ filterResults }) {
 }
 
 export function Scanner() {
-  // liveTokens come from DataContext — tracked globally, always up to date
   const { liveTokens } = useData();
+  const { on } = useSocket();
   const [dbTokens, setDbTokens] = useState([]);
   const [dbAddresses, setDbAddresses] = useState(new Set());
   const [total, setTotal] = useState(0);
@@ -83,7 +84,26 @@ export function Scanner() {
       const timer = setTimeout(() => { loadTokens(); loadFilterBreakdown(); }, 1500);
       return () => clearTimeout(timer);
     }
-  }, [liveTokens, loadTokens]);
+  }, [liveTokens, loadTokens, dbAddresses]);
+
+  // Listen to live socket events to update DB tokens continuously
+  useEffect(() => {
+    const off1 = on('token_scored', (data) => {
+      setDbTokens(prev => prev.map(t => 
+        t.address === data.address 
+          ? { ...t, soft_score: data.score, hard_filter_passed: true, _status: 'scored' } 
+          : t
+      ));
+    });
+    const off2 = on('token_rejected', (data) => {
+      setDbTokens(prev => prev.map(t => 
+        t.address === data.address 
+          ? { ...t, hard_filter_reject_reason: data.reason, hard_filter_passed: false, _status: 'rejected' } 
+          : t
+      ));
+    });
+    return () => { off1(); off2(); };
+  }, [on]);
 
   // Merge: live-only tokens (not yet in DB) prepended to DB records
   // DB records take precedence for same address (more complete data)

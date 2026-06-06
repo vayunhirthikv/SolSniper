@@ -1,8 +1,7 @@
-const { getDb } = require('./index');
+const { query } = require('./index');
 
-function getOverview() {
-  const db = getDb();
-  const r = db.prepare(`
+async function getOverview() {
+  const result = await query(`
     SELECT
       COALESCE(SUM(pnl_usd), 0) as total_pnl_usd,
       COUNT(*) as total_trades,
@@ -15,16 +14,17 @@ function getOverview() {
       MIN(CASE WHEN status='closed' THEN pnl_pct END) as worst_trade_pnl_pct,
       COALESCE(AVG(CASE WHEN status='closed' THEN hold_time_seconds END), 0) as avg_hold_time_seconds
     FROM trades
-  `).get();
+  `);
 
+  const r = result.rows[0];
   const closed = parseInt(r.closed_trades) || 0;
   const winRate = closed > 0 ? (parseInt(r.winning_trades) / closed) * 100 : 0;
   const expectancy = closed > 0 ? parseFloat(r.total_pnl_usd) / closed : 0;
   return { ...r, win_rate: winRate, expectancy };
 }
 
-function getScoreBreakdown() {
-  return getDb().prepare(`
+async function getScoreBreakdown() {
+  const result = await query(`
     SELECT
       CASE WHEN soft_score_at_entry >= 7 THEN '7+' ELSE CAST(soft_score_at_entry AS TEXT) END as score_bucket,
       COUNT(*) as trades,
@@ -34,70 +34,70 @@ function getScoreBreakdown() {
       COALESCE(SUM(pnl_usd), 0) as total_pnl_usd
     FROM trades WHERE status='closed'
     GROUP BY score_bucket ORDER BY score_bucket
-  `).all();
+  `);
+  return result.rows;
 }
 
-function getFilterBreakdown() {
-  return getDb().prepare(`
+async function getFilterBreakdown() {
+  const result = await query(`
     SELECT
       filter_name,
-      SUM(CASE WHEN passed=0 THEN 1 ELSE 0 END) as rejected_count,
+      SUM(CASE WHEN passed=FALSE THEN 1 ELSE 0 END) as rejected_count,
       COUNT(*) as total_checked,
-      ROUND(100.0 * SUM(CASE WHEN passed=1 THEN 1 ELSE 0 END) / MAX(COUNT(*), 1), 2) as pass_rate
+      ROUND(100.0 * SUM(CASE WHEN passed=TRUE THEN 1 ELSE 0 END) / GREATEST(COUNT(*), 1), 2) as pass_rate
     FROM filter_results
     GROUP BY filter_name ORDER BY rejected_count DESC
-  `).all();
+  `);
+  return result.rows;
 }
 
-function getExitAnalysis() {
-  const db = getDb();
-  const byExitReason = db.prepare(`
+async function getExitAnalysis() {
+  const byExitReasonResult = await query(`
     SELECT exit_reason, COUNT(*) as count,
       COALESCE(AVG(pnl_pct), 0) as avg_pnl_pct,
       COALESCE(SUM(pnl_usd), 0) as total_pnl_usd
     FROM trades WHERE status='closed'
     GROUP BY exit_reason ORDER BY count DESC
-  `).all();
+  `);
 
-  const f = db.prepare(`
+  const fResult = await query(`
     SELECT
-      SUM(CASE WHEN json_extract(exit_ladder_progress,'$.200pct')=1 THEN 1 ELSE 0 END) as reached_200,
-      SUM(CASE WHEN json_extract(exit_ladder_progress,'$.500pct')=1 THEN 1 ELSE 0 END) as reached_500,
-      SUM(CASE WHEN json_extract(exit_ladder_progress,'$.1000pct')=1 THEN 1 ELSE 0 END) as reached_1000,
-      SUM(CASE WHEN json_extract(exit_ladder_progress,'$.3000pct')=1 THEN 1 ELSE 0 END) as reached_3000,
+      SUM(CASE WHEN (exit_ladder_progress->>'200pct')::boolean = true THEN 1 ELSE 0 END) as reached_200,
+      SUM(CASE WHEN (exit_ladder_progress->>'500pct')::boolean = true THEN 1 ELSE 0 END) as reached_500,
+      SUM(CASE WHEN (exit_ladder_progress->>'1000pct')::boolean = true THEN 1 ELSE 0 END) as reached_1000,
+      SUM(CASE WHEN (exit_ladder_progress->>'3000pct')::boolean = true THEN 1 ELSE 0 END) as reached_3000,
       COUNT(*) as total
     FROM trades WHERE status='closed'
-  `).get();
+  `);
 
-  return { by_exit_reason: byExitReason, ladder_funnel: f };
+  return { by_exit_reason: byExitReasonResult.rows, ladder_funnel: fResult.rows[0] };
 }
 
-function getTimeAnalysis() {
-  const db = getDb();
-  const byHour = db.prepare(`
-    SELECT CAST(strftime('%H', entry_time) AS INTEGER) as hour,
+async function getTimeAnalysis() {
+  const byHourResult = await query(`
+    SELECT EXTRACT(HOUR FROM entry_time)::INTEGER as hour,
       COUNT(*) as trades,
       COALESCE(AVG(pnl_pct), 0) as avg_pnl_pct
     FROM trades WHERE status='closed'
     GROUP BY hour ORDER BY hour
-  `).all();
+  `);
 
-  const byDay = db.prepare(`
-    SELECT CAST(strftime('%w', entry_time) AS INTEGER) as dow,
+  const byDayResult = await query(`
+    SELECT EXTRACT(DOW FROM entry_time)::INTEGER as dow,
       COUNT(*) as trades,
       COALESCE(AVG(pnl_pct), 0) as avg_pnl_pct
     FROM trades WHERE status='closed'
     GROUP BY dow ORDER BY dow
-  `).all();
+  `);
 
-  return { by_hour: byHour, by_day: byDay };
+  return { by_hour: byHourResult.rows, by_day: byDayResult.rows };
 }
 
-function getSourceAnalysis() {
-  return getDb().prepare(`
+async function getSourceAnalysis() {
+  const result = await query(`
     SELECT
       t.pumpfun_graduated, t.lp_locked,
-      CASE WHEN t.social_twitter=1 OR t.social_telegram=1 THEN 1 ELSE 0 END as has_social,
+      CASE WHEN t.social_twitter=TRUE OR t.social_telegram=TRUE THEN 1 ELSE 0 END as has_social,
       COUNT(tr.id) as trades,
       SUM(CASE WHEN tr.pnl_usd > 0 THEN 1 ELSE 0 END) as wins,
       COALESCE(AVG(tr.pnl_pct), 0) as avg_pnl_pct
@@ -105,28 +105,31 @@ function getSourceAnalysis() {
     JOIN tokens t ON t.address = tr.token_address
     WHERE tr.status='closed'
     GROUP BY t.pumpfun_graduated, t.lp_locked, has_social
-  `).all();
+  `);
+  return result.rows;
 }
 
-function getMoonshots() {
-  return getDb().prepare(`
+async function getMoonshots() {
+  const result = await query(`
     SELECT tr.*, t.pumpfun_graduated, t.lp_locked, t.social_twitter, t.social_telegram
     FROM trades tr
     JOIN tokens t ON t.address = tr.token_address
     WHERE tr.pnl_pct > 1000 AND tr.status='closed'
     ORDER BY tr.pnl_pct DESC
-  `).all();
+  `);
+  return result.rows;
 }
 
-function getLossAnalysis() {
-  return getDb().prepare(`
+async function getLossAnalysis() {
+  const result = await query(`
     SELECT exit_reason, COUNT(*) as count,
       COALESCE(AVG(hold_time_seconds), 0) as avg_hold_seconds,
       COALESCE(AVG(pnl_pct), 0) as avg_pnl_pct,
       COALESCE(SUM(pnl_usd), 0) as total_pnl_usd
     FROM trades WHERE status='closed' AND pnl_usd < 0
     GROUP BY exit_reason ORDER BY count DESC
-  `).all();
+  `);
+  return result.rows;
 }
 
 module.exports = {

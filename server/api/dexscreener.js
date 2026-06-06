@@ -118,4 +118,45 @@ function normalizePair(pair) {
   }
 }
 
-module.exports = { getSolanaPairs, getPairByAddress, pollNewPairs, normalizePair };
+async function getPairsByAddresses(addresses) {
+  if (!addresses || addresses.length === 0) return [];
+  
+  // DexScreener supports up to 30 addresses per request
+  const chunks = [];
+  for (let i = 0; i < addresses.length; i += 30) {
+    chunks.push(addresses.slice(i, i + 30));
+  }
+  
+  const results = [];
+  for (const chunk of chunks) {
+    try {
+      const response = await axios.get(`${BASE_URL}/latest/dex/tokens/${chunk.join(',')}`, {
+        timeout: 8000,
+      });
+      const pairs = response.data?.pairs || [];
+      
+      // We might get multiple pairs per token. Pick the best solana one.
+      const bestPairByAddress = {};
+      for (const p of pairs) {
+        if (p.chainId === 'solana') {
+          const addr = p.baseToken?.address || p.pairAddress;
+          if (!bestPairByAddress[addr]) {
+            bestPairByAddress[addr] = normalizePair(p);
+          }
+        }
+      }
+      
+      for (const addr of chunk) {
+        if (bestPairByAddress[addr]) {
+          results.push(bestPairByAddress[addr]);
+        }
+      }
+    } catch (err) {
+      logger.error('DexScreener getPairsByAddresses failed', { chunkCount: chunk.length, error: err.message });
+    }
+  }
+  
+  return results;
+}
+
+module.exports = { getSolanaPairs, getPairByAddress, pollNewPairs, normalizePair, getPairsByAddresses };

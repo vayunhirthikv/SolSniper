@@ -1,42 +1,41 @@
 const express = require('express');
 const router = express.Router();
-const { getDb } = require('../db/index');
+const { query } = require('../db/index');
 const scanner = require('../engine/scanner');
 const priceTracker = require('../engine/priceTracker');
-const crypto = require('crypto');
 const axios = require('axios');
 
-function loadSettings() {
-  const rows = getDb().prepare('SELECT key, value FROM settings ORDER BY key').all();
+async function loadSettings() {
+  const result = await query('SELECT key, value FROM settings ORDER BY key');
   const settings = {};
-  for (const row of rows) settings[row.key] = row.value;
+  for (const row of result.rows) settings[row.key] = row.value;
   return settings;
 }
 
 // GET /api/settings
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
-    res.json(loadSettings());
+    const settings = await loadSettings();
+    res.json(settings);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
 // PUT /api/settings
-router.put('/', (req, res) => {
+router.put('/', async (req, res) => {
   try {
     const updates = req.body;
     if (!updates || typeof updates !== 'object') {
       return res.status(400).json({ error: 'Body must be an object of key-value pairs' });
     }
 
-    const db = getDb();
-    const stmt = db.prepare(`INSERT INTO settings (id, key, value) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`);
+    const sql = `INSERT INTO settings (key, value) VALUES ($1,$2) ON CONFLICT(key) DO UPDATE SET value=excluded.value`;
     for (const [key, value] of Object.entries(updates)) {
-      stmt.run(crypto.randomUUID(), key, String(value));
+      await query(sql, [key, String(value)]);
     }
 
-    const settings = loadSettings();
+    const settings = await loadSettings();
     scanner.setSettings(settings);
     priceTracker.setSettings(settings);
 
@@ -100,16 +99,14 @@ const DEFAULTS = {
 };
 
 // POST /api/settings/reset
-router.post('/reset', (req, res) => {
+router.post('/reset', async (req, res) => {
   try {
-    const db = getDb();
-    // Delete all settings first so that we completely revert to defaults without leftovers
-    db.prepare('DELETE FROM settings').run();
-    const stmt = db.prepare(`INSERT INTO settings (id, key, value) VALUES (?,?,?)`);
+    await query('DELETE FROM settings');
+    const sql = `INSERT INTO settings (key, value) VALUES ($1,$2)`;
     for (const [key, value] of Object.entries(DEFAULTS)) {
-      stmt.run(crypto.randomUUID(), key, String(value));
+      await query(sql, [key, String(value)]);
     }
-    const settings = loadSettings();
+    const settings = await loadSettings();
     scanner.setSettings(settings);
     priceTracker.setSettings(settings);
     res.json({ success: true, settings });
