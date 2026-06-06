@@ -18,7 +18,7 @@ function startJobs(settings) {
     } catch (err) {
       logger.error('Price tracker job error', { error: err.message });
     }
-  }, 10 * 1000);
+  }, 3 * 1000);
 
   // Scanner — every 10 seconds
   scannerInterval = setInterval(async () => {

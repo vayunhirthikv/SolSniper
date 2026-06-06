@@ -24,9 +24,18 @@ async function trackPrices() {
 
     logger.info(`Price tracking ${openTrades.length} open position(s)`);
 
+    const addresses = openTrades.map(t => t.token_address);
+    const pairs = await dexscreener.getPairsByAddresses(addresses);
+    
+    // Create a map for fast lookup
+    const pairMap = {};
+    for (const p of pairs) {
+      if (p) pairMap[p.address] = p;
+    }
+
     for (const trade of openTrades) {
       try {
-        let pair = await dexscreener.getPairByAddress(trade.token_address);
+        let pair = pairMap[trade.token_address];
         
         let currentPrice = 0;
         let currentLiquidity = 0;
@@ -46,6 +55,9 @@ async function trackPrices() {
           currentPrice = parseFloat(overview.price || '0');
           currentLiquidity = overview.liquidity || 0;
           currentVolume = overview.v24hUSD || 0;
+          
+          // Safety delay for Birdeye API limit ONLY if we hit Birdeye
+          await new Promise(r => setTimeout(r, 300));
         }
 
         if (currentPrice <= 0) continue;
@@ -67,9 +79,6 @@ async function trackPrices() {
           error: err.message,
         });
       }
-
-      // Small delay between tokens to avoid rate limits
-      await new Promise(r => setTimeout(r, 300));
     }
 
     // ── Global TP / SL Evaluation ──
