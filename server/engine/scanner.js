@@ -255,7 +255,8 @@ async function processToken(pair) {
 
   // Execute virtual buy if not already bought
   const tradesDb = require('../db/trades');
-  if (!tradesDb.hasTradeForToken(address)) {
+  const alreadyBought = await tradesDb.hasTradeForToken(address);
+  if (!alreadyBought) {
     const trade = await tradeManager.executeBuy(
       savedToken,
       realPair,
