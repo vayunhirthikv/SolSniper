@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: sol-sniper-backend
+    env: node
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: DATABASE_URL
+        sync: false
