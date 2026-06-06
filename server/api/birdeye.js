@@ -55,6 +55,8 @@ async function checkVolumeAcceleration(address) {
   } catch {
     return false;
   }
+}
+
 async function getNewListings() {
   try {
     const response = await axios.get(`${BASE_URL}/defi/v2/tokens/new_listing?limit=20`, {
