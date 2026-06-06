@@ -1,4 +1,5 @@
 const dexscreener = require('../api/dexscreener');
+const birdeye = require('../api/birdeye');
 const db = require('../db/trades');
 const exitLadder = require('./exitLadder');
 const logger = require('../utils/logger');
@@ -25,14 +26,27 @@ async function trackPrices() {
 
     for (const trade of openTrades) {
       try {
-        const pair = await dexscreener.getPairByAddress(trade.token_address);
-        if (!pair) {
-          logger.warn('Could not fetch price for trade', { tradeId: trade.id });
-          continue;
-        }
+        let pair = await dexscreener.getPairByAddress(trade.token_address);
+        
+        let currentPrice = 0;
+        let currentLiquidity = 0;
+        let currentVolume = 0;
 
-        const currentPrice = parseFloat(pair.priceUsd || '0');
-        const currentLiquidity = pair.liquidity?.usd || 0;
+        if (pair) {
+          currentPrice = parseFloat(pair.priceUsd || '0');
+          currentLiquidity = pair.liquidity?.usd || 0;
+          currentVolume = pair.volume?.h24 || 0;
+        } else {
+          // Fallback to Birdeye if DexScreener is blocked
+          const overview = await birdeye.getTokenOverview(trade.token_address);
+          if (!overview) {
+            logger.warn('Could not fetch price from DexScreener or Birdeye for trade', { tradeId: trade.id });
+            continue;
+          }
+          currentPrice = parseFloat(overview.price || '0');
+          currentLiquidity = overview.liquidity || 0;
+          currentVolume = overview.v24hUSD || 0;
+        }
 
         if (currentPrice <= 0) continue;
 
@@ -41,7 +55,7 @@ async function trackPrices() {
           token_address: trade.token_address,
           price: currentPrice,
           liquidity_usd: currentLiquidity,
-          volume_usd: pair.volume?.h24 || 0,
+          volume_usd: currentVolume,
         });
 
         // Run exit ladder logic
