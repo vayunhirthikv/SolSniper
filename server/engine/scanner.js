@@ -149,10 +149,10 @@ async function processToken(pair) {
     // Reuse security parameters if it didn't fail with api_error
     if (existingToken.hard_filter_reject_reason !== 'api_error') {
       cachedSecurity = {
-        mint_renounced: existingToken.mint_renounced === 1,
-        freeze_disabled: existingToken.freeze_disabled === 1,
-        honeypot_safe: existingToken.honeypot_safe === 1,
-        lp_locked: existingToken.lp_locked === 1,
+        mint_renounced: !!existingToken.mint_renounced,
+        freeze_disabled: !!existingToken.freeze_disabled,
+        honeypot_safe: !!existingToken.honeypot_safe,
+        lp_locked: !!existingToken.lp_locked,
       };
     }
   }
