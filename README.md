@@ -1,4 +1,4 @@
-# ⚡ SolSniper Simulation Engine
+# SolSniper Simulation Engine
 
 A hyper-optimized, high-frequency Solana token tracking and paper-trading simulator. SolSniper continuously scans newly launched pairs on decentralized exchanges, subjects them to rigorous security and momentum filters, and executes virtual trades based on customizable strategies.
 
@@ -6,7 +6,7 @@ Built to run 24/7 without risking real capital, it provides a safe environment t
 
 ---
 
-## 🚀 Key Architectural Features
+## Key Architectural Features
 
 ### 1. Dual-API Discovery Loop & Batching
 The engine continuously polls DexScreener's latest pairs and Birdeye's `new_listing` APIs. 
@@ -54,7 +54,7 @@ Tokens that pass hard filters are graded based on positive momentum indicators:
 
 ---
 
-## 🛠️ Technology Stack
+##  Technology Stack
 
 - **Backend**: Node.js, Express, Socket.io (WebSockets)
 - **Frontend**: React (Vite), TailwindCSS, Recharts
@@ -64,7 +64,7 @@ Tokens that pass hard filters are graded based on positive momentum indicators:
 
 ---
 
-## 💻 Setup & Deployment
+## Setup & Deployment
 
 ### 1. Database (Supabase)
 1. Create a free account on [Supabase](https://supabase.com).
@@ -94,5 +94,5 @@ HELIUS_API_KEY=your_helius_key
 
 ---
 
-## 📜 License
+##  License
 MIT. Built for strategy evaluation, research, and paper-trading simulation purposes.
