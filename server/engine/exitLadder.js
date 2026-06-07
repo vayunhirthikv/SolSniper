@@ -46,6 +46,11 @@ async function processExitLadder(trade, currentPrice, currentLiquidity, settings
   });
 
   // ── EMERGENCY EXITS ──────────────────────────────────────────
+  // Dead pool exit (liquidity completely vanished)
+  if (currentLiquidity < 1000) {
+    return await closeTrade(trade, currentPrice, 'rug_pull', pnlPct, holdSeconds);
+  }
+
   // Stop loss
   if (pnlPct <= -stopLossPct) {
     return await closeTrade(trade, currentPrice, 'stop_loss', pnlPct, holdSeconds);
@@ -57,7 +62,7 @@ async function processExitLadder(trade, currentPrice, currentLiquidity, settings
   }
 
   // Liquidity drop exit (>50% from entry)
-  if (currentLiquidity && trade.entry_liquidity_usd) {
+  if (currentLiquidity !== undefined && trade.entry_liquidity_usd > 0) {
     const liqDrop = ((trade.entry_liquidity_usd - currentLiquidity) / trade.entry_liquidity_usd) * 100;
     if (liqDrop > 50) {
       return await closeTrade(trade, currentPrice, 'liquidity_drop', pnlPct, holdSeconds);
@@ -186,6 +191,11 @@ async function processExitLadder(trade, currentPrice, currentLiquidity, settings
 }
 
 async function closeTrade(trade, exitPrice, reason, pnlPct, holdSeconds) {
+  // If the pool was rug pulled or liquidity dropped, force a -100% loss (can't sell)
+  if (reason === 'liquidity_drop' || reason === 'rug_pull') {
+    pnlPct = -100;
+  }
+
   const remainingPct = trade.remaining_position_pct || 100;
   const realizedPnl = trade.realized_pnl_usd || 0;
 
