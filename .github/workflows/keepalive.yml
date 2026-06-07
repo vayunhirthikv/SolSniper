@@ -13,4 +13,4 @@ jobs:
       - name: Ping Backend
         run: |
           # Replace the URL below with your actual Render backend URL
-          curl -sS "https://sol-sniper-backend.onrender.com/health" || echo "Ping failed"
+          curl -sS "https://solsniper-72oe.onrender.com/health" || echo "Ping failed"
