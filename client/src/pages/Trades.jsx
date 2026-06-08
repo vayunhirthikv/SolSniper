@@ -39,8 +39,9 @@ function SummaryBar({ stats }) {
         { label:'LOSERS', value: losses, color:'var(--loss)' },
         { label:'WIN RATE', value: `${winRate}%`, color: parseFloat(winRate) >= 20 ? 'var(--profit)' : 'var(--loss)' },
         { label:'TOTAL P&L', value: formatUSD(stats.total_pnl_usd || 0), color: pnlColor(parseFloat(stats.total_pnl_usd || 0)) },
+        { label:'SESSION P&L', value: formatUSD(stats.live_session_pnl || 0), color: pnlColor(parseFloat(stats.live_session_pnl || 0)), highlight: true },
       ].map(item => (
-        <div key={item.label}>
+        <div key={item.label} style={item.highlight ? { padding: '4px 12px', background: 'rgba(255,255,255,0.05)', borderRadius: 6, border: '1px solid var(--border-light)' } : {}}>
           <div style={{ fontFamily:'var(--font-mono)', fontSize:9, color:'var(--fg-muted)', letterSpacing:'0.1em', marginBottom:2 }}>{item.label}</div>
           <div style={{ fontFamily:'var(--font-display)', fontWeight:700, fontSize:16, color:item.color || 'var(--fg)' }}>{item.value}</div>
         </div>
@@ -97,6 +98,11 @@ export function Trades() {
     };
   });
 
+  const runningPnl = mergedTrades.filter(t => t.status === 'open').reduce((s, t) => s + (t.pnl_usd || 0), 0);
+  const sessionClosedPnl = parseFloat(stats?.session_closed_pnl_usd || 0);
+  const liveSessionPnl = sessionClosedPnl + runningPnl;
+  const enrichedStats = stats ? { ...stats, live_session_pnl: liveSessionPnl } : null;
+
   const filteredTrades = pnlFilter === 'winners' ? mergedTrades.filter(t => t.pnl_usd > 0)
     : pnlFilter === 'losers' ? mergedTrades.filter(t => t.pnl_usd < 0) : mergedTrades;
 
@@ -122,7 +128,7 @@ export function Trades() {
         <span style={{ fontFamily:'var(--font-mono)', fontSize:11, color:'var(--fg-muted)' }}>{total} TOTAL</span>
       </div>
 
-      <SummaryBar stats={stats} />
+      <SummaryBar stats={enrichedStats} />
 
       {/* Filters */}
       <div className="card" style={{ display:'flex', gap:10, flexWrap:'wrap', alignItems:'center' }}>

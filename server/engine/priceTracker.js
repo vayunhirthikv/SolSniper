@@ -1,6 +1,7 @@
 const dexscreener = require('../api/dexscreener');
 const birdeye = require('../api/birdeye');
 const db = require('../db/trades');
+const settingsDb = require('../db/settings');
 const exitLadder = require('./exitLadder');
 const logger = require('../utils/logger');
 
@@ -88,7 +89,8 @@ async function trackPrices() {
     if (!isNaN(globalTp) || !isNaN(globalSl)) {
       const currentOpen = await db.getOpenTrades();
       if (currentOpen.length > 0) {
-        let totalNetPnl = 0;
+        const sessionStart = settings.session_start_time || '1970-01-01T00:00:00.000Z';
+        let totalNetPnl = await db.getSessionClosedPnl(sessionStart);
         const tradesToClose = [];
 
         for (const t of currentOpen) {
@@ -105,10 +107,10 @@ async function trackPrices() {
         let triggerReason = null;
         if (!isNaN(globalTp) && totalNetPnl >= globalTp) {
           triggerReason = 'global_tp';
-          logger.info(`Global Take Profit hit: $${totalNetPnl.toFixed(2)} >= $${globalTp}`);
+          logger.info(`Session Take Profit hit: $${totalNetPnl.toFixed(2)} >= $${globalTp}`);
         } else if (!isNaN(globalSl) && totalNetPnl <= -Math.abs(globalSl)) {
           triggerReason = 'global_sl';
-          logger.info(`Global Stop Loss hit: $${totalNetPnl.toFixed(2)} <= -$${Math.abs(globalSl)}`);
+          logger.info(`Session Stop Loss hit: $${totalNetPnl.toFixed(2)} <= -$${Math.abs(globalSl)}`);
         }
 
         if (triggerReason) {
@@ -120,6 +122,12 @@ async function trackPrices() {
               logger.error('Failed to close trade on global TP/SL', { tradeId: trade.id, error: e.message });
             }
           }
+          
+          // Reset the Session!
+          logger.info(`Resetting Rolling PnL Session back to $0`);
+          const nowIso = new Date().toISOString();
+          await settingsDb.updateSettings({ session_start_time: nowIso });
+          settings.session_start_time = nowIso;
         }
       }
     }

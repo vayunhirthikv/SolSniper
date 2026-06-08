@@ -1,9 +1,14 @@
 const { query } = require('./index');
+const settingsDb = require('./settings');
 
 async function getOverview() {
+  const settings = await settingsDb.getSettings();
+  const sessionStart = settings.session_start_time || '1970-01-01T00:00:00.000Z';
+
   const result = await query(`
     SELECT
       COALESCE(SUM(pnl_usd), 0) as total_pnl_usd,
+      COALESCE(SUM(CASE WHEN (status='closed' AND exit_time >= $1) THEN pnl_usd ELSE 0 END), 0) as session_closed_pnl_usd,
       COUNT(*) as total_trades,
       SUM(CASE WHEN status='open' THEN 1 ELSE 0 END) as open_trades,
       SUM(CASE WHEN status='closed' AND pnl_usd > 0 THEN 1 ELSE 0 END) as winning_trades,
@@ -14,7 +19,7 @@ async function getOverview() {
       MIN(CASE WHEN status='closed' THEN pnl_pct END) as worst_trade_pnl_pct,
       COALESCE(AVG(CASE WHEN status='closed' THEN hold_time_seconds END), 0) as avg_hold_time_seconds
     FROM trades
-  `);
+  `, [new Date(sessionStart).toISOString()]);
 
   const r = result.rows[0];
   const closed = parseInt(r.closed_trades) || 0;

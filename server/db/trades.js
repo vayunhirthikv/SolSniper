@@ -99,7 +99,20 @@ async function getTrades({ page = 1, limit = 50, status, score_min, score_max, e
 }
 
 async function getTodayLosses() {
-  const result = await query(`SELECT COALESCE(SUM(ABS(pnl_usd)), 0) as total FROM trades WHERE status='closed' AND DATE(entry_time)=CURRENT_DATE AND pnl_usd < 0`);
+  const result = await query(`
+    SELECT COALESCE(SUM(pnl_usd), 0) as total 
+    FROM trades 
+    WHERE status='closed' AND pnl_usd < 0 AND exit_time >= CURRENT_DATE
+  `);
+  return parseFloat(result.rows[0]?.total || 0);
+}
+
+async function getSessionClosedPnl(startTime) {
+  const result = await query(`
+    SELECT COALESCE(SUM(pnl_usd), 0) as total 
+    FROM trades 
+    WHERE status='closed' AND exit_time >= $1
+  `, [new Date(startTime).toISOString()]);
   return parseFloat(result.rows[0]?.total || 0);
 }
 
@@ -164,6 +177,6 @@ async function hasTradeForToken(tokenAddress) {
 
 module.exports = {
   createTrade, updateTrade, closeTrade, getOpenTrades, getTrade, getTrades,
-  getTodayLosses, getTradeStats, getPriceHistory, insertPriceHistory,
+  getTodayLosses, getSessionClosedPnl, getTradeStats, getPriceHistory, insertPriceHistory,
   getDailySnapshots, upsertDailySnapshot, clearAllTrades, hasTradeForToken,
 };
