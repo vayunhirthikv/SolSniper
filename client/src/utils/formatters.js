@@ -2,8 +2,10 @@
 export function formatUSD(value, decimals = 2) {
   if (value === null || value === undefined || isNaN(value)) return '$0.00';
   const abs = Math.abs(Number(value));
+  if (abs === 0) return '$0.00';
   if (abs >= 1_000_000) return `$${(Number(value) / 1_000_000).toFixed(2)}M`;
   if (abs >= 1_000) return `$${(Number(value) / 1_000).toFixed(1)}K`;
+  if (abs < 0.01) return `$${Number(value).toFixed(4)}`;
   return `$${Number(value).toFixed(decimals)}`;
 }
 
