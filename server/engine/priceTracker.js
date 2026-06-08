@@ -96,9 +96,9 @@ async function trackPrices() {
         for (const t of currentOpen) {
           if (t.current_price) {
             const pnlPct = ((t.current_price - t.entry_price) / t.entry_price) * 100;
-            const remainingPct = t.remaining_position_pct || 100;
+            const remainingPct = parseFloat(t.remaining_position_pct || 100);
             const unrealized = (t.position_size_usd * remainingPct / 100) * (pnlPct / 100);
-            totalNetPnl += (t.realized_pnl_usd || 0) + unrealized;
+            totalNetPnl += parseFloat(t.realized_pnl_usd || 0) + unrealized;
             
             tradesToClose.push({ trade: t, pnlPct });
           }

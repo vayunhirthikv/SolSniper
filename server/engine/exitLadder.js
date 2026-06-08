@@ -30,8 +30,8 @@ async function processExitLadder(trade, currentPrice, currentLiquidity, settings
   let ladder = trade.exit_ladder_progress || {};
 
   // Track high and low PnL across the life of the trade
-  const highPnl = Math.max(trade.high_pnl_pct || 0, pnlPct);
-  const lowPnl  = Math.min(trade.low_pnl_pct  || 0, pnlPct);
+  const highPnl = Math.max(parseFloat(trade.high_pnl_pct || 0), pnlPct);
+  const lowPnl  = Math.min(parseFloat(trade.low_pnl_pct  || 0), pnlPct);
 
   // For backward compatibility and key indexing
   const isHit1 = ladder['level_1'] || ladder['200pct'] || false;
@@ -82,9 +82,9 @@ async function processExitLadder(trade, currentPrice, currentLiquidity, settings
   }
 
   // ── LADDER EXITS ─────────────────────────────────────────────
-  let remainingPct = trade.remaining_position_pct || 100;
-  let realizedPnl = trade.realized_pnl_usd || 0;
-  let accumulatedFeesUsd = trade.fees_usd || 0;
+  let remainingPct = parseFloat(trade.remaining_position_pct || 100);
+  let realizedPnl = parseFloat(trade.realized_pnl_usd || 0);
+  let accumulatedFeesUsd = parseFloat(trade.fees_usd || 0);
   let feeBreakdown = trade.fee_breakdown || {};
   let ladderUpdated = false;
   const partialSells = [];
@@ -163,7 +163,7 @@ async function processExitLadder(trade, currentPrice, currentLiquidity, settings
 
   // No exits triggered — just emit price update
   const unrealizedPnl = (trade.position_size_usd * remainingPct / 100) * (pnlPct / 100);
-  const totalPnl = (trade.realized_pnl_usd || 0) + unrealizedPnl;
+  const totalPnl = parseFloat(trade.realized_pnl_usd || 0) + unrealizedPnl;
 
   emit('price_update', {
     tradeId: trade.id,
@@ -181,7 +181,7 @@ async function processExitLadder(trade, currentPrice, currentLiquidity, settings
 }
 
 async function closeTrade(trade, exitPrice, reason, pnlPct, holdSeconds, currentLiquidity = 0) {
-  const remainingPct = trade.remaining_position_pct || 100;
+  const remainingPct = parseFloat(trade.remaining_position_pct || 100);
   
   // Smart Market Exit Logic for Rug Pulls / Liquidity Drops
   if (reason === 'liquidity_drop' || reason === 'rug_pull') {
@@ -201,8 +201,8 @@ async function closeTrade(trade, exitPrice, reason, pnlPct, holdSeconds, current
     }
   }
 
-  let realizedPnl = trade.realized_pnl_usd || 0;
-  let accumulatedFeesUsd = trade.fees_usd || 0;
+  let realizedPnl = parseFloat(trade.realized_pnl_usd || 0);
+  let accumulatedFeesUsd = parseFloat(trade.fees_usd || 0);
   let feeBreakdown = trade.fee_breakdown || {};
 
   const originalAmount = trade.position_size_usd * (remainingPct / 100);
@@ -237,8 +237,8 @@ async function closeTrade(trade, exitPrice, reason, pnlPct, holdSeconds, current
     pnl_usd: totalPnlUsd,
     pnl_pct: pnlPct,
     hold_time_seconds: holdSeconds,
-    high_pnl_pct: Math.max(trade.high_pnl_pct || 0, pnlPct),
-    low_pnl_pct:  Math.min(trade.low_pnl_pct  || 0, pnlPct),
+    high_pnl_pct: Math.max(parseFloat(trade.high_pnl_pct || 0), pnlPct),
+    low_pnl_pct:  Math.min(parseFloat(trade.low_pnl_pct  || 0), pnlPct),
     fees_usd: accumulatedFeesUsd,
     fee_breakdown: feeBreakdown,
   });

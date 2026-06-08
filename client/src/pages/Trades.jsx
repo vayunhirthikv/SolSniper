@@ -106,8 +106,8 @@ export function Trades() {
     };
   });
 
-  const runningPnl = mergedTrades.filter(t => t.status === 'open').reduce((s, t) => s + (t.pnl_usd || 0), 0);
-  const runningFees = mergedTrades.filter(t => t.status === 'open').reduce((s, t) => s + (t.fees_usd || 0), 0);
+  const runningPnl = mergedTrades.filter(t => t.status === 'open').reduce((s, t) => s + parseFloat(t.pnl_usd || 0), 0);
+  const runningFees = mergedTrades.filter(t => t.status === 'open').reduce((s, t) => s + parseFloat(t.fees_usd || 0), 0);
 
   const enrichedStats = stats ? { 
     ...stats, 
