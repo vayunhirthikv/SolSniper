@@ -13,14 +13,14 @@ export function Dashboard() {
   useEffect(() => { loadStats(); }, [loadStats]);
 
   const s = stats || {};
-  const totalPnl    = parseFloat(s.total_pnl_usd || 0);
-  const winRate     = parseFloat(s.win_rate || 0);
-  const bestPnl     = parseFloat(s.best_trade_pnl_pct || 0);
-  const openCount   = parseInt(s.open_trades || 0);
-
   const runningPnl = Object.keys(priceUpdates).length > 0
     ? totalRunningPnl
     : (positions || []).reduce((sum, p) => sum + (p.pnl_usd || 0), 0);
+
+  const totalPnl    = parseFloat(s.total_pnl_usd || 0) + runningPnl;
+  const winRate     = parseFloat(s.win_rate || 0);
+  const bestPnl     = parseFloat(s.best_trade_pnl_pct || 0);
+  const openCount   = parseInt(s.open_trades || 0);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
