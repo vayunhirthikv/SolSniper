@@ -372,4 +372,5 @@ module.exports = {
   getStatus,
   processToken,
   clearSeenAddresses,
+  getSettings: () => currentSettings,
 };

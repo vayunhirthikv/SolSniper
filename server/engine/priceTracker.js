@@ -104,6 +104,8 @@ async function trackPrices() {
           }
         }
 
+        logger.info(`Evaluating Global TP/SL -> totalNetPnl: ${totalNetPnl}, globalTp: ${globalTp}`);
+
         let triggerReason = null;
         if (!isNaN(globalTp) && totalNetPnl >= globalTp) {
           triggerReason = 'global_tp';
