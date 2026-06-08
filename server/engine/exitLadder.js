@@ -101,8 +101,8 @@ async function processExitLadder(trade, currentPrice, currentLiquidity, settings
       
       const feeResult = feeCalculator.calculateVirtualSell(grossExitValue, feeCalculator.DEFAULT_SOL_PRICE);
       
-      // Update PnL: (Exit Value - Original Amount) - Exit Fees
-      const netGainOnSell = (grossExitValue - originalAmount) - feeResult.exitFriction;
+      // Update PnL: (Exit Value - Original Amount)
+      const netGainOnSell = (grossExitValue - originalAmount);
       
       realizedPnl += netGainOnSell;
       accumulatedFeesUsd += feeResult.exitFriction;
@@ -213,7 +213,7 @@ async function closeTrade(trade, exitPrice, reason, pnlPct, holdSeconds, current
   if (pnlPct === -100) {
     // Rug Pull: Burn & Close
     const feeResult = feeCalculator.calculateVirtualRugPull(feeCalculator.DEFAULT_SOL_PRICE);
-    finalGain = -originalAmount - feeResult.exitFriction;
+    finalGain = -originalAmount;
     
     accumulatedFeesUsd += feeResult.exitFriction;
     feeBreakdown.exitGas = (feeBreakdown.exitGas || 0) + feeResult.breakdown.exitGas;
@@ -222,7 +222,7 @@ async function closeTrade(trade, exitPrice, reason, pnlPct, holdSeconds, current
   } else {
     // Standard Sell & Close
     const feeResult = feeCalculator.calculateVirtualSell(grossExitValue, feeCalculator.DEFAULT_SOL_PRICE);
-    finalGain = (grossExitValue - originalAmount) - feeResult.exitFriction;
+    finalGain = (grossExitValue - originalAmount);
 
     accumulatedFeesUsd += feeResult.exitFriction;
     feeBreakdown.exitGas = (feeBreakdown.exitGas || 0) + feeResult.breakdown.exitGas;

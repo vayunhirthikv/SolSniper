@@ -30,8 +30,8 @@ function SummaryBar({ stats, runningPnl }) {
   const losses = parseInt(stats.losing_trades || 0);
   const winRate = closed > 0 ? ((wins / closed) * 100).toFixed(1) : '0.0';
   const totalFees = parseFloat(stats.total_fees_usd || 0);
-  const netPnl = parseFloat(stats.total_pnl_usd || 0);
-  const grossPnl = netPnl + totalFees;
+  const grossPnl = parseFloat(stats.total_pnl_usd || 0);
+  const netPnl = grossPnl - totalFees;
   const sessionClosedPnl = parseFloat(stats.session_closed_pnl_usd || 0);
   const liveSessionPnl = sessionClosedPnl + (runningPnl || 0);
 
@@ -208,7 +208,7 @@ export function Trades() {
                 const update = priceUpdates[t.id];
                 const highPnl = update?.highPnl ?? t.high_pnl_pct;
                 const lowPnl  = update?.lowPnl  ?? t.low_pnl_pct;
-                const grossRowPnl = t.pnl_usd !== null && t.pnl_usd !== undefined ? t.pnl_usd + (t.fees_usd || 0) : null;
+                const grossRowPnl = t.pnl_usd !== null && t.pnl_usd !== undefined ? t.pnl_usd : null;
                 return (
                   <tr key={t.id} onClick={() => navigate(`/token/${t.token_address}`)}
                     className={grossRowPnl > 0 ? 'profit-row' : grossRowPnl < 0 ? 'loss-row' : ''}>

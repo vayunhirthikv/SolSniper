@@ -55,7 +55,7 @@ async function executeBuy(token, pair, score, breakdown, settings) {
       '1000pct': false,
       '3000pct': false,
     },
-    realized_pnl_usd: -entryFeeResult.feesUsd,
+    realized_pnl_usd: 0,
     fees_usd: entryFeeResult.feesUsd,
     fee_breakdown: entryFeeResult.breakdown,
     remaining_position_pct: 100,
