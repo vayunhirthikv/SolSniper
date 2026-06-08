@@ -8,7 +8,7 @@ async function getTokenTradeData(address) {
     const response = await axios.get(`${BASE_URL}/defi/v2/tokens/trade-data/single`, {
       params: { address },
       headers: {
-        'X-API-KEY': process.env.BIRDEYE_API_KEY || '',
+        'X-API-KEY': process.env.BIRDEYE_API_KEY || '037286e490514c348a59e39e4441dadc',
         'Accept': 'application/json',
         'x-chain': 'solana',
       },
@@ -26,7 +26,7 @@ async function getTokenOverview(address) {
     const response = await axios.get(`${BASE_URL}/defi/token_overview`, {
       params: { address },
       headers: {
-        'X-API-KEY': process.env.BIRDEYE_API_KEY || '',
+        'X-API-KEY': process.env.BIRDEYE_API_KEY || '037286e490514c348a59e39e4441dadc',
         'Accept': 'application/json',
         'x-chain': 'solana',
       },
@@ -61,7 +61,7 @@ async function getNewListings() {
   try {
     const response = await axios.get(`${BASE_URL}/defi/v2/tokens/new_listing?limit=20`, {
       headers: {
-        'X-API-KEY': process.env.BIRDEYE_API_KEY || '',
+        'X-API-KEY': process.env.BIRDEYE_API_KEY || '037286e490514c348a59e39e4441dadc',
         'Accept': 'application/json',
         'x-chain': 'solana',
       },
