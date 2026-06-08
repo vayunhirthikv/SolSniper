@@ -107,10 +107,10 @@ export function Trades() {
     : pnlFilter === 'losers' ? mergedTrades.filter(t => t.pnl_usd < 0) : mergedTrades;
 
   const exportCSV = () => {
-    const headers = ['ID','Token','Entry Time','Entry Price','Position $','Score','PnL %','PnL $','Hold Time','Exit Reason','Status'];
+    const headers = ['ID','Token','Entry Time','Entry Price','Position $','Score','PnL %','PnL $','Fees $','Hold Time','Exit Reason','Status'];
     const rows = filteredTrades.map(t => [
       t.id, t.token_name, t.entry_time, t.entry_price, t.position_size_usd,
-      t.soft_score_at_entry, t.pnl_pct?.toFixed(2), t.pnl_usd?.toFixed(4),
+      t.soft_score_at_entry, t.pnl_pct?.toFixed(2), t.pnl_usd?.toFixed(4), t.fees_usd?.toFixed(4),
       formatHoldTime(t.hold_time_seconds), t.exit_reason, t.status
     ]);
     const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
@@ -178,6 +178,7 @@ export function Trades() {
                 <th>Score</th>
                 <th>PnL %</th>
                 <th>PnL $</th>
+                <th>Fees $</th>
                 <th style={{ color: 'var(--profit)' }}>High %</th>
                 <th style={{ color: 'var(--loss)' }}>Low %</th>
                 <th>Hold Time</th>
@@ -213,6 +214,22 @@ export function Trades() {
                     </td>
                     <td style={{ fontFamily:'var(--font-mono)', fontSize:12, color:pnlColor(t.pnl_usd) }}>
                       {t.pnl_usd !== null && t.pnl_usd !== undefined ? `${t.pnl_usd >= 0 ? '+' : ''}${formatUSD(t.pnl_usd)}` : '—'}
+                    </td>
+                    {/* Fees $ with Tooltip */}
+                    <td style={{ fontFamily:'var(--font-mono)', fontSize:11, color:'var(--fg-muted)', position:'relative' }}
+                        title={
+                          t.fee_breakdown ? 
+                          `Entry Gas: ${formatUSD(t.fee_breakdown.entryGas || 0)}\n` +
+                          `Entry Swap: ${formatUSD(t.fee_breakdown.entrySwap || 0)}\n` +
+                          `Entry Rent: ${formatUSD(t.fee_breakdown.entryRent || 0)}\n` +
+                          `Exit Gas: ${formatUSD(t.fee_breakdown.exitGas || 0)}\n` +
+                          `Exit Swap: ${formatUSD(t.fee_breakdown.exitSwap || 0)}\n` +
+                          `Rent Refund: +${formatUSD(t.fee_breakdown.exitRentRefund || 0)}` 
+                          : 'No breakdown available'
+                        }>
+                      <span style={{ borderBottom: '1px dotted var(--fg-muted)', cursor: 'help' }}>
+                        {formatUSD(t.fees_usd || 0)}
+                      </span>
                     </td>
                     {/* High % */}
                     <td style={{ fontFamily:'var(--font-mono)', fontSize:11, color:'var(--profit)', fontWeight:600 }}>

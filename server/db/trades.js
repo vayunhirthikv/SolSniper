@@ -8,9 +8,16 @@ function parseLadder(val) {
 
 function parseTrade(t) {
   if (!t) return null;
+  let breakdown = {};
+  if (typeof t.fee_breakdown === 'object') breakdown = t.fee_breakdown;
+  else {
+    try { breakdown = JSON.parse(t.fee_breakdown); } catch { breakdown = {}; }
+  }
+
   return {
     ...t,
     exit_ladder_progress: parseLadder(t.exit_ladder_progress),
+    fee_breakdown: breakdown,
     mint_renounced: Boolean(t.mint_renounced),
     hard_filter_passed: Boolean(t.hard_filter_passed),
   };
@@ -21,8 +28,8 @@ async function createTrade(data) {
     INSERT INTO trades (
       token_id, token_address, token_name, entry_price,
       position_size_usd, soft_score_at_entry, current_price, exit_ladder_progress,
-      realized_pnl_usd, remaining_position_pct, entry_liquidity_usd, status
-    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+      realized_pnl_usd, fees_usd, fee_breakdown, remaining_position_pct, entry_liquidity_usd, status
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
     RETURNING *
   `, [
     data.token_id,
@@ -34,6 +41,8 @@ async function createTrade(data) {
     data.current_price || data.entry_price,
     data.exit_ladder_progress || { '200pct': false, '500pct': false, '1000pct': false, '3000pct': false },
     data.realized_pnl_usd || 0,
+    data.fees_usd || 0,
+    data.fee_breakdown || {},
     data.remaining_position_pct || 100,
     data.entry_liquidity_usd || 0,
     'open'
@@ -54,10 +63,13 @@ async function updateTrade(id, updates) {
   return parseTrade(result.rows[0]);
 }
 
-async function closeTrade(id, { exit_price, exit_reason, pnl_usd, pnl_pct, hold_time_seconds, high_pnl_pct, low_pnl_pct }) {
-  const result = await query(`UPDATE trades SET status='closed', exit_price=$1, exit_time=NOW(), exit_reason=$2, pnl_usd=$3, pnl_pct=$4, hold_time_seconds=$5, high_pnl_pct=$6, low_pnl_pct=$7 WHERE id=$8 RETURNING *`,
-    [exit_price, exit_reason, pnl_usd, pnl_pct, hold_time_seconds, high_pnl_pct ?? null, low_pnl_pct ?? null, id]
-  );
+async function closeTrade(id, { exit_price, exit_reason, pnl_usd, pnl_pct, hold_time_seconds, high_pnl_pct, low_pnl_pct, fees_usd, fee_breakdown }) {
+  const result = await query(`
+    UPDATE trades 
+    SET status='closed', exit_price=$1, exit_time=NOW(), exit_reason=$2, pnl_usd=$3, pnl_pct=$4, 
+        hold_time_seconds=$5, high_pnl_pct=$6, low_pnl_pct=$7, fees_usd=$8, fee_breakdown=$9
+    WHERE id=$10 RETURNING *
+  `, [exit_price, exit_reason, pnl_usd, pnl_pct, hold_time_seconds, high_pnl_pct ?? null, low_pnl_pct ?? null, fees_usd, fee_breakdown, id]);
   return parseTrade(result.rows[0]);
 }
 

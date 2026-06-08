@@ -2,6 +2,7 @@ const db = require('../db/trades');
 const logger = require('../utils/logger');
 const { emit } = require('../websocket/liveEvents');
 const axios = require('axios');
+const feeCalculator = require('./feeCalculator');
 
 /**
  * Process exit ladder logic for an open trade
@@ -83,71 +84,59 @@ async function processExitLadder(trade, currentPrice, currentLiquidity, settings
   // ── LADDER EXITS ─────────────────────────────────────────────
   let remainingPct = trade.remaining_position_pct || 100;
   let realizedPnl = trade.realized_pnl_usd || 0;
+  let accumulatedFeesUsd = trade.fees_usd || 0;
+  let feeBreakdown = trade.fee_breakdown || {};
   let ladderUpdated = false;
   const partialSells = [];
 
-  if (exitLadderEnabled) {
-    // Level 1
-    if (pnlPct >= level1 && !isHit1) {
-    const sellPct = sell1;
-    const sellAmount = (trade.position_size_usd * sellPct / 100);
-    const gainOnSell = sellAmount * (pnlPct / 100);
-    realizedPnl += gainOnSell;
-    remainingPct -= sellPct;
-    ladder['level_1'] = true;
-    ladder['200pct'] = true; // Set both for safety
-    ladderUpdated = true;
-    partialSells.push({ level: 'level_1', pnlPct, sellPct, gainOnSell });
-    logger.info(`Ladder exit level 1 (+${level1}%)`, { tradeId: trade.id, pnlPct: pnlPct.toFixed(2) });
-  }
+  const handlePartialSell = (levelKey, displayLevel, sellPctTarget, isHit) => {
+    if (pnlPct >= displayLevel && !isHit) {
+      let sellPct = remainingPct * (sellPctTarget / 100);
+      if (levelKey === 'level_1' || levelKey === 'level_2' || levelKey === 'level_3') {
+        sellPct = sellPctTarget; // Absolute percentage for the first 3
+      }
 
-  // Level 2
-  if (pnlPct >= level2 && !isHit2) {
-    const sellPct = sell2;
-    const sellAmount = (trade.position_size_usd * sellPct / 100);
-    const gainOnSell = sellAmount * (pnlPct / 100);
-    realizedPnl += gainOnSell;
-    remainingPct -= sellPct;
-    ladder['level_2'] = true;
-    ladder['500pct'] = true;
-    ladderUpdated = true;
-    partialSells.push({ level: 'level_2', pnlPct, sellPct, gainOnSell });
-    logger.info(`Ladder exit level 2 (+${level2}%)`, { tradeId: trade.id, pnlPct: pnlPct.toFixed(2) });
-  }
+      const originalAmount = (trade.position_size_usd * sellPct / 100);
+      const grossExitValue = originalAmount * (1 + (pnlPct / 100));
+      
+      const feeResult = feeCalculator.calculateVirtualSell(grossExitValue, feeCalculator.DEFAULT_SOL_PRICE, false);
+      
+      // Update PnL: (Exit Value - Original Amount) - Exit Fees
+      const netGainOnSell = (grossExitValue - originalAmount) - feeResult.exitFriction;
+      
+      realizedPnl += netGainOnSell;
+      accumulatedFeesUsd += feeResult.exitFriction;
+      
+      feeBreakdown.exitGas = (feeBreakdown.exitGas || 0) + feeResult.breakdown.exitGas;
+      feeBreakdown.exitSwap = (feeBreakdown.exitSwap || 0) + feeResult.breakdown.exitSwap;
 
-  // Level 3
-  if (pnlPct >= level3 && !isHit3) {
-    const sellPct = sell3;
-    const sellAmount = (trade.position_size_usd * sellPct / 100);
-    const gainOnSell = sellAmount * (pnlPct / 100);
-    realizedPnl += gainOnSell;
-    remainingPct -= sellPct;
-    ladder['level_3'] = true;
-    ladder['1000pct'] = true;
-    ladderUpdated = true;
-    partialSells.push({ level: 'level_3', pnlPct, sellPct, gainOnSell });
-    logger.info(`Ladder exit level 3 (+${level3}%)`, { tradeId: trade.id, pnlPct: pnlPct.toFixed(2) });
-  }
-
-    // Level 4
-    if (pnlPct >= level4 && !isHit4) {
-      const sellPct = remainingPct * (sell4 / 100); // e.g. sellPct% of what's left
-      const sellAmount = (trade.position_size_usd * sellPct / 100);
-      const gainOnSell = sellAmount * (pnlPct / 100);
-      realizedPnl += gainOnSell;
       remainingPct -= sellPct;
-      ladder['level_4'] = true;
-      ladder['3000pct'] = true;
+      ladder[levelKey] = true;
       ladderUpdated = true;
-      partialSells.push({ level: 'level_4', pnlPct, sellPct: sellPct.toFixed(1), gainOnSell });
-      logger.info(`Ladder exit level 4 (+${level4}%)`, { tradeId: trade.id, pnlPct: pnlPct.toFixed(2) });
+      partialSells.push({ level: levelKey, pnlPct, sellPct: sellPct.toFixed(1), gainOnSell: netGainOnSell });
+      logger.info(`Ladder exit ${levelKey} (+${displayLevel}%)`, { tradeId: trade.id, pnlPct: pnlPct.toFixed(2), fees: feeResult.exitFriction.toFixed(4) });
     }
+  };
+
+  if (exitLadderEnabled) {
+    handlePartialSell('level_1', level1, sell1, isHit1);
+    handlePartialSell('level_2', level2, sell2, isHit2);
+    handlePartialSell('level_3', level3, sell3, isHit3);
+    handlePartialSell('level_4', level4, sell4, isHit4);
+    
+    // For backward compatibility keys
+    if (ladder['level_1']) ladder['200pct'] = true;
+    if (ladder['level_2']) ladder['500pct'] = true;
+    if (ladder['level_3']) ladder['1000pct'] = true;
+    if (ladder['level_4']) ladder['3000pct'] = true;
   }
 
   if (ladderUpdated) {
     const updatedTrade = await db.updateTrade(trade.id, {
       exit_ladder_progress: ladder,
       realized_pnl_usd: realizedPnl,
+      fees_usd: accumulatedFeesUsd,
+      fee_breakdown: feeBreakdown,
       remaining_position_pct: remainingPct,
     });
 
@@ -212,11 +201,36 @@ async function closeTrade(trade, exitPrice, reason, pnlPct, holdSeconds, current
     }
   }
 
-  const realizedPnl = trade.realized_pnl_usd || 0;
+  let realizedPnl = trade.realized_pnl_usd || 0;
+  let accumulatedFeesUsd = trade.fees_usd || 0;
+  let feeBreakdown = trade.fee_breakdown || {};
 
-  // Final sell of remaining position
-  const remainingValue = trade.position_size_usd * remainingPct / 100;
-  const finalGain = remainingValue * (pnlPct / 100);
+  const originalAmount = trade.position_size_usd * (remainingPct / 100);
+  const grossExitValue = originalAmount * (1 + (pnlPct / 100));
+
+  let finalGain = 0;
+  
+  if (pnlPct === -100) {
+    // Rug Pull: Burn & Close
+    const feeResult = feeCalculator.calculateVirtualRugPull(feeCalculator.DEFAULT_SOL_PRICE);
+    finalGain = -originalAmount - feeResult.exitFriction;
+    
+    accumulatedFeesUsd += feeResult.exitFriction;
+    feeBreakdown.exitGas = (feeBreakdown.exitGas || 0) + feeResult.breakdown.exitGas;
+    feeBreakdown.exitRentRefund = (feeBreakdown.exitRentRefund || 0) + feeResult.breakdown.exitRentRefund;
+    
+    logger.info('Burn & Close fallback executed', { tradeId: trade.id, rentRecovered: feeResult.breakdown.exitRentRefund });
+  } else {
+    // Standard Sell & Close
+    const feeResult = feeCalculator.calculateVirtualSell(grossExitValue, feeCalculator.DEFAULT_SOL_PRICE, true);
+    finalGain = (grossExitValue - originalAmount) - feeResult.exitFriction;
+
+    accumulatedFeesUsd += feeResult.exitFriction;
+    feeBreakdown.exitGas = (feeBreakdown.exitGas || 0) + feeResult.breakdown.exitGas;
+    feeBreakdown.exitSwap = (feeBreakdown.exitSwap || 0) + feeResult.breakdown.exitSwap;
+    feeBreakdown.exitRentRefund = (feeBreakdown.exitRentRefund || 0) + feeResult.breakdown.exitRentRefund;
+  }
+
   const totalPnlUsd = realizedPnl + finalGain;
 
   const closed = await db.closeTrade(trade.id, {
@@ -227,6 +241,8 @@ async function closeTrade(trade, exitPrice, reason, pnlPct, holdSeconds, current
     hold_time_seconds: holdSeconds,
     high_pnl_pct: Math.max(trade.high_pnl_pct || 0, pnlPct),
     low_pnl_pct:  Math.min(trade.low_pnl_pct  || 0, pnlPct),
+    fees_usd: accumulatedFeesUsd,
+    fee_breakdown: feeBreakdown,
   });
 
   logger.info('Trade closed', {

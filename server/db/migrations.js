@@ -58,6 +58,8 @@ async function runMigrations() {
         hold_time_seconds INTEGER,
         exit_ladder_progress JSONB DEFAULT '{"200pct":false,"500pct":false,"1000pct":false,"3000pct":false}'::jsonb,
         realized_pnl_usd DOUBLE PRECISION DEFAULT 0,
+        fees_usd DOUBLE PRECISION DEFAULT 0,
+        fee_breakdown JSONB DEFAULT '{}'::jsonb,
         remaining_position_pct DOUBLE PRECISION DEFAULT 100,
         entry_liquidity_usd DOUBLE PRECISION,
         status TEXT DEFAULT 'open',
@@ -114,6 +116,15 @@ async function runMigrations() {
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       );
     `);
+
+    // Add fees columns to existing trades table
+    try {
+      await query(`ALTER TABLE trades ADD COLUMN fees_usd DOUBLE PRECISION DEFAULT 0;`);
+    } catch (e) { }
+    try {
+      await query(`ALTER TABLE trades ADD COLUMN fee_breakdown JSONB DEFAULT '{}'::jsonb;`);
+    } catch (e) { }
+    logger.info('Ensured fee columns exist in trades table');
 
     await query(`CREATE INDEX IF NOT EXISTS idx_tokens_address ON tokens(address);`);
     await query(`CREATE INDEX IF NOT EXISTS idx_tokens_created ON tokens(created_at);`);

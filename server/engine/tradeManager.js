@@ -2,6 +2,7 @@ const db = require('../db/trades');
 const logger = require('../utils/logger');
 const { emit } = require('../websocket/liveEvents');
 const axios = require('axios');
+const feeCalculator = require('./feeCalculator');
 
 /**
  * Execute a virtual buy for a token
@@ -36,6 +37,9 @@ async function executeBuy(token, pair, score, breakdown, settings) {
     return null;
   }
 
+  // Calculate virtual entry fees
+  const entryFeeResult = feeCalculator.calculateVirtualBuy(positionSize);
+
   const trade = await db.createTrade({
     token_id: token.id,
     token_address: token.address,
@@ -51,7 +55,9 @@ async function executeBuy(token, pair, score, breakdown, settings) {
       '1000pct': false,
       '3000pct': false,
     },
-    realized_pnl_usd: 0,
+    realized_pnl_usd: -entryFeeResult.feesUsd,
+    fees_usd: entryFeeResult.feesUsd,
+    fee_breakdown: entryFeeResult.breakdown,
     remaining_position_pct: 100,
   });
 
