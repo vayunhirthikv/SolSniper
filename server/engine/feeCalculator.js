@@ -11,10 +11,11 @@ function calculateVirtualBuy(positionSizeUSD, currentSolPrice = DEFAULT_SOL_PRIC
     const swapFeeUSD = positionSizeUSD * RAYDIUM_FEE_PCT;
 
     const totalFees = gasFeeUSD + rentFeeUSD + swapFeeUSD;
+    const sunkFriction = gasFeeUSD + swapFeeUSD;
     
     return { 
         netWalletChange: -(positionSizeUSD + totalFees), 
-        feesUsd: totalFees,
+        feesUsd: sunkFriction,
         breakdown: {
             entryGas: gasFeeUSD,
             entryRent: rentFeeUSD,
@@ -32,10 +33,11 @@ function calculateVirtualSell(grossExitValueUSD, currentSolPrice = DEFAULT_SOL_P
     const swapFeeUSD = grossExitValueUSD * RAYDIUM_FEE_PCT;
 
     const netWalletChange = grossExitValueUSD - gasFeeUSD - swapFeeUSD + rentRefundUSD;
+    const sunkFriction = gasFeeUSD + swapFeeUSD;
     
     return { 
         netWalletChange, 
-        exitFriction: gasFeeUSD + swapFeeUSD - rentRefundUSD,
+        exitFriction: sunkFriction,
         breakdown: {
             exitGas: gasFeeUSD,
             exitRentRefund: rentRefundUSD,
@@ -49,10 +51,11 @@ function calculateVirtualRugPull(currentSolPrice = DEFAULT_SOL_PRICE) {
     const rentRefundUSD = RENT_FEE_SOL * currentSolPrice; 
 
     const netWalletChange = rentRefundUSD - gasFeeUSD;
+    const sunkFriction = gasFeeUSD;
     
     return { 
         netWalletChange, 
-        exitFriction: gasFeeUSD - rentRefundUSD,
+        exitFriction: sunkFriction,
         breakdown: {
             exitGas: gasFeeUSD,
             exitRentRefund: rentRefundUSD,
