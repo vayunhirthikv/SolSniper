@@ -46,26 +46,29 @@ async function processExitLadder(trade, currentPrice, currentLiquidity, settings
   });
 
   // ── EMERGENCY EXITS ──────────────────────────────────────────
+  const deadPoolLiq = parseFloat(settings.dead_pool_liquidity_usd || 1000);
+  const liqDropPctThreshold = parseFloat(settings.liquidity_drop_pct || 50);
+
   // Dead pool exit (liquidity completely vanished)
-  if (currentLiquidity < 1000) {
-    return await closeTrade(trade, currentPrice, 'rug_pull', pnlPct, holdSeconds);
+  if (currentLiquidity < deadPoolLiq) {
+    return await closeTrade(trade, currentPrice, 'rug_pull', pnlPct, holdSeconds, currentLiquidity);
   }
 
   // Stop loss
   if (pnlPct <= -stopLossPct) {
-    return await closeTrade(trade, currentPrice, 'stop_loss', pnlPct, holdSeconds);
+    return await closeTrade(trade, currentPrice, 'stop_loss', pnlPct, holdSeconds, currentLiquidity);
   }
 
   // Time exit (3 hours + under 20% gain)
   if (holdHours >= timeExitHours && pnlPct < 20) {
-    return await closeTrade(trade, currentPrice, 'time_exit', pnlPct, holdSeconds);
+    return await closeTrade(trade, currentPrice, 'time_exit', pnlPct, holdSeconds, currentLiquidity);
   }
 
-  // Liquidity drop exit (>50% from entry)
+  // Liquidity drop exit
   if (currentLiquidity !== undefined && trade.entry_liquidity_usd > 0) {
     const liqDrop = ((trade.entry_liquidity_usd - currentLiquidity) / trade.entry_liquidity_usd) * 100;
-    if (liqDrop > 50) {
-      return await closeTrade(trade, currentPrice, 'liquidity_drop', pnlPct, holdSeconds);
+    if (liqDrop > liqDropPctThreshold) {
+      return await closeTrade(trade, currentPrice, 'liquidity_drop', pnlPct, holdSeconds, currentLiquidity);
     }
   }
 
@@ -74,9 +77,7 @@ async function processExitLadder(trade, currentPrice, currentLiquidity, settings
 
   // Simple Take Profit (if set, and we reached it)
   if (takeProfitPct > 0 && pnlPct >= takeProfitPct) {
-    // If exit ladder is enabled, check if the Take Profit is HIGHER than the highest ladder level.
-    // Actually, if TP is hit, we just close the whole trade. The user can use TP instead of the ladder.
-    return await closeTrade(trade, currentPrice, 'take_profit', pnlPct, holdSeconds);
+    return await closeTrade(trade, currentPrice, 'take_profit', pnlPct, holdSeconds, currentLiquidity);
   }
 
   // ── LADDER EXITS ─────────────────────────────────────────────
@@ -190,13 +191,27 @@ async function processExitLadder(trade, currentPrice, currentLiquidity, settings
   return { closed: false, partialSells: [], trade };
 }
 
-async function closeTrade(trade, exitPrice, reason, pnlPct, holdSeconds) {
-  // If the pool was rug pulled or liquidity dropped, force a -100% loss (can't sell)
+async function closeTrade(trade, exitPrice, reason, pnlPct, holdSeconds, currentLiquidity = 0) {
+  const remainingPct = trade.remaining_position_pct || 100;
+  
+  // Smart Market Exit Logic for Rug Pulls / Liquidity Drops
   if (reason === 'liquidity_drop' || reason === 'rug_pull') {
-    pnlPct = -100;
+    const remainingValueUsd = trade.position_size_usd * (remainingPct / 100);
+    const currentTheoreticalValue = remainingValueUsd * (1 + (pnlPct / 100));
+    
+    // If the pool is literally dead (< $100) or if our tokens are worth more than the entire pool, we can't sell.
+    if (currentLiquidity < 100 || currentTheoreticalValue > currentLiquidity) {
+      pnlPct = -100;
+    } else {
+      // We can squeeze out! Remove the -100% penalty and capture the real market PnL.
+      logger.info('Smart Market Exit executed for small position', { 
+        tradeId: trade.id, 
+        currentValue: currentTheoreticalValue.toFixed(2), 
+        liquidityLeft: currentLiquidity.toFixed(2) 
+      });
+    }
   }
 
-  const remainingPct = trade.remaining_position_pct || 100;
   const realizedPnl = trade.realized_pnl_usd || 0;
 
   // Final sell of remaining position

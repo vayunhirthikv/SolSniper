@@ -202,6 +202,8 @@ export function Settings() {
         { label: 'Take Profit %', key: 'take_profit_pct', desc: 'Close trade automatically at this profit percentage' },
         { label: 'Stop Loss %', key: 'stop_loss_pct', desc: 'Close trade at this loss percentage' },
         { label: 'Time Exit (hours)', key: 'time_exit_hours', desc: 'Close if under +20% after this many hours' },
+        { label: 'Dead Pool Liquidity ($)', key: 'dead_pool_liquidity_usd', desc: 'Exit if total pool liquidity drops below this amount' },
+        { label: 'Liquidity Drop (%)', key: 'liquidity_drop_pct', desc: 'Exit if liquidity drops by this percentage from entry' },
       ],
     },
     {

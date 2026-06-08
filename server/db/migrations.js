@@ -141,6 +141,8 @@ async function runMigrations() {
       ['stop_loss_pct', '65'],
       ['time_exit_hours', '3'],
       ['pumpfun_social_bonus', '0.50'],
+      ['dead_pool_liquidity_usd', '1000'],
+      ['liquidity_drop_pct', '50'],
       ['exit_ladder_level_1', '200'],
       ['exit_ladder_sell_1', '20'],
       ['exit_ladder_level_2', '500'],
