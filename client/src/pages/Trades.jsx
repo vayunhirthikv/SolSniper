@@ -23,7 +23,7 @@ function HoldTimer({ entryTime, initialHoldSeconds, status }) {
   return <span>{formatHoldTime(elapsed)}</span>;
 }
 
-function SummaryBar({ stats }) {
+function SummaryBar({ stats, runningPnl }) {
   if (!stats) return null;
   const closed = parseInt(stats.closed_trades || 0);
   const wins = parseInt(stats.winning_trades || 0);
@@ -32,6 +32,8 @@ function SummaryBar({ stats }) {
   const totalFees = parseFloat(stats.total_fees_usd || 0);
   const netPnl = parseFloat(stats.total_pnl_usd || 0);
   const grossPnl = netPnl + totalFees;
+  const sessionClosedPnl = parseFloat(stats.session_closed_pnl_usd || 0);
+  const liveSessionPnl = sessionClosedPnl + (runningPnl || 0);
 
   return (
     <div style={{ display:'flex', gap:20, flexWrap:'wrap', padding:'12px 20px', background:'var(--bg-muted)', border:'1px solid var(--border)' }}>
@@ -44,7 +46,8 @@ function SummaryBar({ stats }) {
         { label:'WIN RATE', value: `${winRate}%`, color: parseFloat(winRate) >= 20 ? 'var(--profit)' : 'var(--loss)' },
         { label:'GROSS P&L', value: formatUSD(grossPnl), color: pnlColor(grossPnl) },
         { label:'TOTAL FEES', value: formatUSD(totalFees), color: 'var(--loss)' },
-        { label:'NET P&L', value: formatUSD(netPnl), color: pnlColor(netPnl), highlight: true },
+        { label:'NET P&L', value: formatUSD(netPnl), color: pnlColor(netPnl) },
+        { label:'SESSION P&L', value: formatUSD(liveSessionPnl), color: pnlColor(liveSessionPnl), highlight: true },
       ].map(item => (
         <div key={item.label} style={item.highlight ? { padding: '4px 12px', background: 'rgba(255,255,255,0.05)', borderRadius: 6, border: '1px solid var(--border-light)' } : {}}>
           <div style={{ fontFamily:'var(--font-mono)', fontSize:9, color:'var(--fg-muted)', letterSpacing:'0.1em', marginBottom:2 }}>{item.label}</div>
@@ -137,7 +140,7 @@ export function Trades() {
         <span style={{ fontFamily:'var(--font-mono)', fontSize:11, color:'var(--fg-muted)' }}>{total} TOTAL</span>
       </div>
 
-      <SummaryBar stats={enrichedStats} />
+      <SummaryBar stats={enrichedStats} runningPnl={runningPnl} />
 
       {/* Filters */}
       <div className="card" style={{ display:'flex', gap:10, flexWrap:'wrap', alignItems:'center' }}>
