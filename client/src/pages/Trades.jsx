@@ -29,6 +29,10 @@ function SummaryBar({ stats }) {
   const wins = parseInt(stats.winning_trades || 0);
   const losses = parseInt(stats.losing_trades || 0);
   const winRate = closed > 0 ? ((wins / closed) * 100).toFixed(1) : '0.0';
+  const totalFees = parseFloat(stats.total_fees_usd || 0);
+  const netPnl = parseFloat(stats.total_pnl_usd || 0);
+  const grossPnl = netPnl + totalFees;
+
   return (
     <div style={{ display:'flex', gap:20, flexWrap:'wrap', padding:'12px 20px', background:'var(--bg-muted)', border:'1px solid var(--border)' }}>
       {[
@@ -38,8 +42,9 @@ function SummaryBar({ stats }) {
         { label:'WINNERS', value: wins, color:'var(--profit)' },
         { label:'LOSERS', value: losses, color:'var(--loss)' },
         { label:'WIN RATE', value: `${winRate}%`, color: parseFloat(winRate) >= 20 ? 'var(--profit)' : 'var(--loss)' },
-        { label:'TOTAL P&L', value: formatUSD(stats.total_pnl_usd || 0), color: pnlColor(parseFloat(stats.total_pnl_usd || 0)) },
-        { label:'SESSION P&L', value: formatUSD(stats.live_session_pnl || 0), color: pnlColor(parseFloat(stats.live_session_pnl || 0)), highlight: true },
+        { label:'GROSS P&L', value: formatUSD(grossPnl), color: pnlColor(grossPnl) },
+        { label:'TOTAL FEES', value: formatUSD(totalFees), color: 'var(--loss)' },
+        { label:'NET P&L', value: formatUSD(netPnl), color: pnlColor(netPnl), highlight: true },
       ].map(item => (
         <div key={item.label} style={item.highlight ? { padding: '4px 12px', background: 'rgba(255,255,255,0.05)', borderRadius: 6, border: '1px solid var(--border-light)' } : {}}>
           <div style={{ fontFamily:'var(--font-mono)', fontSize:9, color:'var(--fg-muted)', letterSpacing:'0.1em', marginBottom:2 }}>{item.label}</div>
@@ -99,9 +104,13 @@ export function Trades() {
   });
 
   const runningPnl = mergedTrades.filter(t => t.status === 'open').reduce((s, t) => s + (t.pnl_usd || 0), 0);
-  const sessionClosedPnl = parseFloat(stats?.session_closed_pnl_usd || 0);
-  const liveSessionPnl = sessionClosedPnl + runningPnl;
-  const enrichedStats = stats ? { ...stats, live_session_pnl: liveSessionPnl } : null;
+  const runningFees = mergedTrades.filter(t => t.status === 'open').reduce((s, t) => s + (t.fees_usd || 0), 0);
+
+  const enrichedStats = stats ? { 
+    ...stats, 
+    total_pnl_usd: parseFloat(stats.total_pnl_usd || 0) + runningPnl,
+    total_fees_usd: parseFloat(stats.total_fees_usd || 0) + runningFees
+  } : null;
 
   const filteredTrades = pnlFilter === 'winners' ? mergedTrades.filter(t => t.pnl_usd > 0)
     : pnlFilter === 'losers' ? mergedTrades.filter(t => t.pnl_usd < 0) : mergedTrades;
@@ -221,10 +230,8 @@ export function Trades() {
                           t.fee_breakdown ? 
                           `Entry Gas: ${formatUSD(t.fee_breakdown.entryGas || 0)}\n` +
                           `Entry Swap: ${formatUSD(t.fee_breakdown.entrySwap || 0)}\n` +
-                          `Entry Rent: ${formatUSD(t.fee_breakdown.entryRent || 0)}\n` +
                           `Exit Gas: ${formatUSD(t.fee_breakdown.exitGas || 0)}\n` +
-                          `Exit Swap: ${formatUSD(t.fee_breakdown.exitSwap || 0)}\n` +
-                          `Rent Refund: +${formatUSD(t.fee_breakdown.exitRentRefund || 0)}` 
+                          `Exit Swap: ${formatUSD(t.fee_breakdown.exitSwap || 0)}` 
                           : 'No breakdown available'
                         }>
                       <span style={{ borderBottom: '1px dotted var(--fg-muted)', cursor: 'help' }}>

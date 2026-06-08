@@ -137,6 +137,7 @@ async function getTradeStats() {
       SUM(CASE WHEN pnl_usd > 0 THEN 1 ELSE 0 END) as winning_trades,
       SUM(CASE WHEN pnl_usd < 0 THEN 1 ELSE 0 END) as losing_trades,
       COALESCE(SUM(pnl_usd), 0) as total_pnl_usd,
+      COALESCE(SUM(fees_usd), 0) as total_fees_usd,
       COALESCE(AVG(pnl_pct), 0) as avg_pnl_pct,
       MAX(pnl_pct) as best_trade_pnl_pct,
       MIN(pnl_pct) as worst_trade_pnl_pct,
