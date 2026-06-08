@@ -8,6 +8,7 @@ async function getOverview() {
   const result = await query(`
     SELECT
       COALESCE(SUM(pnl_usd), 0) as total_pnl_usd,
+      COALESCE(SUM(CASE WHEN status='closed' THEN fees_usd ELSE 0 END), 0) as total_fees_usd,
       COALESCE(SUM(CASE WHEN (status='closed' AND exit_time >= $1) THEN pnl_usd ELSE 0 END), 0) as session_closed_pnl_usd,
       COUNT(*) as total_trades,
       SUM(CASE WHEN status='open' THEN 1 ELSE 0 END) as open_trades,

@@ -105,6 +105,10 @@ async function trackPrices() {
         }
 
         logger.info(`Evaluating Global TP/SL -> totalNetPnl: ${totalNetPnl}, globalTp: ${globalTp}`);
+        
+        try {
+          require('fs').writeFileSync('debug.txt', `[${new Date().toISOString()}] totalNetPnl: ${totalNetPnl}, globalTp: ${globalTp}\n`, { flag: 'a' });
+        } catch(e) {}
 
         let triggerReason = null;
         if (!isNaN(globalTp) && totalNetPnl >= globalTp) {
