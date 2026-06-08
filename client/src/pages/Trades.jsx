@@ -208,9 +208,10 @@ export function Trades() {
                 const update = priceUpdates[t.id];
                 const highPnl = update?.highPnl ?? t.high_pnl_pct;
                 const lowPnl  = update?.lowPnl  ?? t.low_pnl_pct;
+                const grossRowPnl = t.pnl_usd !== null && t.pnl_usd !== undefined ? t.pnl_usd + (t.fees_usd || 0) : null;
                 return (
                   <tr key={t.id} onClick={() => navigate(`/token/${t.token_address}`)}
-                    className={t.pnl_usd > 0 ? 'profit-row' : t.pnl_usd < 0 ? 'loss-row' : ''}>
+                    className={grossRowPnl > 0 ? 'profit-row' : grossRowPnl < 0 ? 'loss-row' : ''}>
                     <td style={{ fontWeight:600, maxWidth:120, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{t.token_name}</td>
                     <td style={{ fontFamily:'var(--font-mono)', fontSize:11, color:'var(--fg-muted)', whiteSpace:'nowrap' }}>
                       {parseDate(t.entry_time).toLocaleString([], { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' })}
@@ -224,8 +225,8 @@ export function Trades() {
                     }}>
                       {t.pnl_pct !== null && t.pnl_pct !== undefined ? `${t.pnl_pct >= 0 ? '+' : ''}${t.pnl_pct?.toFixed(2)}%` : '—'}
                     </td>
-                    <td style={{ fontFamily:'var(--font-mono)', fontSize:12, color:pnlColor(t.pnl_usd) }}>
-                      {t.pnl_usd !== null && t.pnl_usd !== undefined ? `${t.pnl_usd >= 0 ? '+' : ''}${formatUSD(t.pnl_usd)}` : '—'}
+                    <td style={{ fontFamily:'var(--font-mono)', fontSize:12, color:pnlColor(grossRowPnl) }}>
+                      {grossRowPnl !== null ? `${grossRowPnl >= 0 ? '+' : ''}${formatUSD(grossRowPnl)}` : '—'}
                     </td>
                     {/* Fees $ with Tooltip */}
                     <td style={{ fontFamily:'var(--font-mono)', fontSize:11, color:'var(--fg-muted)', position:'relative' }}
